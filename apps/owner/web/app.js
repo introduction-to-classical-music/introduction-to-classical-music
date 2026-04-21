@@ -190,6 +190,8 @@ const articlePreviewDialog = document.querySelector("#owner-article-preview-dial
 const articlePreviewClose = document.querySelector("#owner-article-preview-close");
 const GROUP_ROLE_VALUES = new Set(["orchestra", "ensemble", "chorus", "instrumentalist"]);
 const PERSON_ROLE_VALUES = new Set(["composer", "conductor", "soloist", "singer", "instrumentalist"]);
+const PERSON_ONLY_ROLE_VALUES = new Set(["composer", "conductor", "soloist", "singer"]);
+const GROUP_ONLY_ROLE_VALUES = new Set(["orchestra", "ensemble", "chorus"]);
 const GROUP_FORM_ROLE_LABELS = {
   orchestra: "乐团",
   ensemble: "组合",
@@ -262,6 +264,16 @@ const getVisibleDetailTabForEntity = (entityType, entity = null) => {
     return entity?.roles?.some((role) => GROUP_ROLE_VALUES.has(role)) ? "group" : "person";
   }
   return entityType;
+};
+
+const getDetailTabFormKey = (tabName) => {
+  if (tabName === "group") {
+    return "person";
+  }
+  if (tabName === "site" || tabName === "composer") {
+    return "";
+  }
+  return tabName || "";
 };
 
 const normalizeDetailTabs = () => {
@@ -349,6 +361,26 @@ const configurePersonFormMode = (mode = "person") => {
       wrapper.append(document.createTextNode(` ${labels[input.value] || input.value}`));
     }
   });
+};
+
+const getCurrentPersonFormEntity = () => {
+  if (state.activeEntity?.type !== "person" || !compact(state.activeEntity?.id || "")) {
+    return null;
+  }
+  return state.library?.people?.find((item) => item.id === state.activeEntity.id) || null;
+};
+
+const isDetailTabEntityCompatible = (tabName, entity) => {
+  if (!entity || !["person", "group"].includes(tabName)) {
+    return true;
+  }
+  const roles = Array.isArray(entity.roles) ? entity.roles.map((role) => compact(role)) : [];
+  const hasPersonOnlyRole = roles.some((role) => PERSON_ONLY_ROLE_VALUES.has(role));
+  const hasGroupOnlyRole = roles.some((role) => GROUP_ONLY_ROLE_VALUES.has(role));
+  if (tabName === "group") {
+    return !hasPersonOnlyRole || hasGroupOnlyRole;
+  }
+  return !hasGroupOnlyRole || hasPersonOnlyRole;
 };
 normalizeEntityActionButtons();
 normalizeSearchTypeOptions();
@@ -927,6 +959,7 @@ const deleteEntity = async (form) => {
   resetEntityForm(form);
   setActiveDetailTab(getVisibleDetailTabForEntity(entityType), {
     panel: entityType === "composer" ? "person" : undefined,
+    preserveLoadedEntity: true,
   });
   setResult(result);
 };
@@ -953,6 +986,7 @@ const mergeEntity = async (form) => {
   await loadEntity(entityType, targetId);
   setActiveDetailTab(getVisibleDetailTabForEntity(entityType, getEntityByTypeAndId(entityType, targetId)), {
     panel: entityType === "composer" ? "composer" : undefined,
+    preserveLoadedEntity: true,
   });
   setResult(result);
 };
@@ -974,6 +1008,19 @@ const setActiveView = (viewName) => {
 const setActiveDetailTab = (tabName, options = {}) => {
   const requestedTab = tabName || "site";
   const resolvedPanel = options.panel || (requestedTab === "group" ? "person" : requestedTab);
+  const currentTab = document.querySelector("[data-detail-tab].is-active")?.dataset?.detailTab || "";
+  const targetFormKey = getDetailTabFormKey(requestedTab);
+  const targetForm = targetFormKey ? document.querySelector(`[data-entity-form="${targetFormKey}"]`) : null;
+  if (!options.preserveLoadedEntity && currentTab && currentTab !== requestedTab && targetForm) {
+    resetEntityForm(targetForm);
+  }
+  const personForm = document.querySelector('[data-entity-form="person"]');
+  if ((requestedTab === "person" || requestedTab === "group") && personForm) {
+    const currentPersonEntity = getCurrentPersonFormEntity();
+    if (!isDetailTabEntityCompatible(requestedTab, currentPersonEntity)) {
+      resetEntityForm(personForm);
+    }
+  }
   [...document.querySelectorAll("[data-detail-tab]")].forEach((button) => {
     button.classList.toggle("is-active", button.dataset.detailTab === requestedTab);
   });
@@ -1783,28 +1830,31 @@ const buildSitePayload = () => ({
   copyrightNotice: compact(siteForm.elements.copyrightNotice.value),
 });
 
-const buildNamedEntityPayload = (form) => ({
-  id: compact(form.elements.existingId.value) || undefined,
-  name: compact(form.elements.name.value),
-  nameLatin: compact(form.elements.nameLatin.value),
-  country: compact(form.elements.country.value),
-  birthYear: parseIntegerString(parseLifeRangeInput(form.elements.lifeRange?.value || "").birthYear || form.elements.birthYear.value),
-  deathYear: parseIntegerString(parseLifeRangeInput(form.elements.lifeRange?.value || "").deathYear || form.elements.deathYear.value),
-  avatarSrc: compact(form.elements.avatarSrc.value),
-  imageSourceUrl: compact(form.elements.imageSourceUrl.value),
-  imageSourceKind: compact(form.elements.imageSourceKind.value),
-  imageAttribution: compact(form.elements.imageAttribution.value),
-  imageUpdatedAt: compact(form.elements.imageUpdatedAt.value),
-  slug: compact(form.elements.slug.value),
-  sortKey: compact(form.elements.sortKey.value),
-  aliases: parseLines(form.elements.aliases.value, (line) => line),
-  summary: compact(form.elements.summary.value),
-  infoPanel: {
-    text: compact(form.elements.infoPanelText.value),
-    articleId: compact(form.elements.infoPanelArticleId.value),
-    collectionLinks: readInfoPanelLinksFromForm(form),
-  },
-});
+const buildNamedEntityPayload = (form) => {
+  const existingId = compact(form.elements.existingId.value);
+  return {
+    id: existingId || undefined,
+    name: compact(form.elements.name.value),
+    nameLatin: compact(form.elements.nameLatin.value),
+    country: compact(form.elements.country.value),
+    birthYear: parseIntegerString(parseLifeRangeInput(form.elements.lifeRange?.value || "").birthYear || form.elements.birthYear.value),
+    deathYear: parseIntegerString(parseLifeRangeInput(form.elements.lifeRange?.value || "").deathYear || form.elements.deathYear.value),
+    avatarSrc: compact(form.elements.avatarSrc.value),
+    imageSourceUrl: compact(form.elements.imageSourceUrl.value),
+    imageSourceKind: compact(form.elements.imageSourceKind.value),
+    imageAttribution: compact(form.elements.imageAttribution.value),
+    imageUpdatedAt: compact(form.elements.imageUpdatedAt.value),
+    slug: existingId ? compact(form.elements.slug.value) : "",
+    sortKey: existingId ? compact(form.elements.sortKey.value) : "",
+    aliases: parseLines(form.elements.aliases.value, (line) => line),
+    summary: compact(form.elements.summary.value),
+    infoPanel: {
+      text: compact(form.elements.infoPanelText.value),
+      articleId: compact(form.elements.infoPanelArticleId.value),
+      collectionLinks: readInfoPanelLinksFromForm(form),
+    },
+  };
+};
 
 const buildComposerPayload = (form) => ({
   ...buildNamedEntityPayload(form),
@@ -3520,7 +3570,7 @@ const loadEntity = async (entityType, entityId) => {
   if (entityType === "site") {
     fillSiteForm(state.site);
     state.activeEntity = { type: "site", id: "site" };
-    setActiveDetailTab("site");
+    setActiveDetailTab("site", { preserveLoadedEntity: true });
     clearInlineCheck();
     return;
   }
@@ -3534,6 +3584,7 @@ const loadEntity = async (entityType, entityId) => {
   state.activeEntity = { type: entityType, id: entityId };
   setActiveDetailTab(getVisibleDetailTabForEntity(entityType, entity), {
     panel: entityType === "composer" ? "composer" : undefined,
+    preserveLoadedEntity: true,
   });
   clearInlineCheck();
   setResult({ loaded: entityType, id: entityId });
@@ -5000,6 +5051,7 @@ const runSingleEntityCheck = async (entityType) => {
   setActiveView("detail");
   setActiveDetailTab(getVisibleDetailTabForEntity(entityType, getEntityByTypeAndId(entityType, entityId)), {
     panel: entityType === "composer" ? "composer" : undefined,
+    preserveLoadedEntity: true,
   });
   const { job } = await fetchJson(`/api/automation/entity-check/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`, {
     method: "POST",

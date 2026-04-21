@@ -547,4 +547,181 @@ describe("owner entity helpers", () => {
     expect(canUnlinkOwnerEntityRelation(library, "person", "person-beethoven", "work", "work-beethoven-5")).toBe(false);
     expect(() => unlinkOwnerEntityRelation(library, "person", "person-beethoven", "work", "work-beethoven-5")).toThrow();
   });
+
+  it("does not let a group save overwrite an existing composite person/composer entry", () => {
+    const library = validateLibrary({
+      composers: [],
+      people: [
+        {
+          id: "person-beethoven",
+          slug: "beethoven",
+          name: "贝多芬",
+          nameLatin: "Beethoven",
+          roles: ["composer", "conductor"],
+          aliases: [],
+          sortKey: "0010",
+          summary: "",
+          country: "德国",
+          countries: ["德国"],
+          avatarSrc: "",
+          imageSourceUrl: "",
+          imageSourceKind: "",
+          imageAttribution: "",
+          imageUpdatedAt: "",
+          birthYear: 1770,
+          deathYear: 1827,
+          infoPanel: { text: "", articleId: "", collectionLinks: [] },
+        },
+      ],
+      workGroups: [
+        {
+          id: "group-beethoven-symphony",
+          composerId: "person-beethoven",
+          title: "交响曲",
+          slug: "symphony",
+          path: ["交响曲"],
+          sortKey: "0010",
+        },
+      ],
+      works: [
+        {
+          id: "work-beethoven-5",
+          composerId: "person-beethoven",
+          groupIds: ["group-beethoven-symphony"],
+          slug: "symphony-no-5",
+          title: "第五交响曲",
+          titleLatin: "Symphony No. 5",
+          aliases: [],
+          catalogue: "Op. 67",
+          summary: "",
+          sortKey: "0100",
+          updatedAt: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      recordings: [],
+    });
+
+    const savedGroup = buildOwnerEntity(library, "person", {
+      id: "person-beethoven",
+      name: "测试乐团",
+      nameLatin: "Test Orchestra",
+      roles: ["orchestra"],
+      aliases: [],
+      summary: "",
+      country: "中国",
+      countries: ["中国"],
+      slug: "",
+      sortKey: "",
+      infoPanel: { text: "", articleId: "", collectionLinks: [] },
+    }) as LibraryData["people"][number];
+
+    expect(savedGroup.id).not.toBe("person-beethoven");
+    expect(savedGroup.roles).toEqual(["orchestra"]);
+
+    const nextLibrary = validateLibrary({
+      ...library,
+      people: [...library.people, savedGroup],
+    });
+
+    expect(nextLibrary.people).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "person-beethoven", roles: expect.arrayContaining(["composer", "conductor"]) }),
+        expect.objectContaining({ id: savedGroup.id, roles: ["orchestra"] }),
+      ]),
+    );
+    expect(nextLibrary.composers.find((item) => item.id === "person-beethoven")).toBeTruthy();
+  });
+
+  it("keeps the existing person id when the updated roles stay within the same family", () => {
+    const library = validateLibrary({
+      composers: [],
+      people: [
+        {
+          id: "person-mahler",
+          slug: "mahler",
+          name: "马勒",
+          nameLatin: "Mahler",
+          roles: ["composer", "conductor"],
+          aliases: [],
+          sortKey: "0010",
+          summary: "",
+          country: "奥地利",
+          countries: ["奥地利"],
+          avatarSrc: "",
+          imageSourceUrl: "",
+          imageSourceKind: "",
+          imageAttribution: "",
+          imageUpdatedAt: "",
+          birthYear: 1860,
+          deathYear: 1911,
+          infoPanel: { text: "", articleId: "", collectionLinks: [] },
+        },
+      ],
+      workGroups: [],
+      works: [],
+      recordings: [],
+    });
+
+    const updatedPerson = buildOwnerEntity(library, "person", {
+      id: "person-mahler",
+      name: "古斯塔夫·马勒",
+      nameLatin: "Gustav Mahler",
+      roles: ["composer", "conductor"],
+      aliases: [],
+      summary: "",
+      country: "奥地利",
+      countries: ["奥地利"],
+      slug: "",
+      sortKey: "",
+      infoPanel: { text: "", articleId: "", collectionLinks: [] },
+    }) as LibraryData["people"][number];
+
+    expect(updatedPerson.id).toBe("person-mahler");
+  });
+
+  it("derives a fresh group identity from the current name instead of stale slug fields", () => {
+    const library = validateLibrary({
+      composers: [],
+      people: [
+        {
+          id: "person-beethoven",
+          slug: "beethoven",
+          name: "贝多芬",
+          nameLatin: "Beethoven",
+          roles: ["composer", "conductor"],
+          aliases: [],
+          sortKey: "0010",
+          summary: "",
+          country: "德国",
+          countries: ["德国"],
+          avatarSrc: "",
+          imageSourceUrl: "",
+          imageSourceKind: "",
+          imageAttribution: "",
+          imageUpdatedAt: "",
+          infoPanel: { text: "", articleId: "", collectionLinks: [] },
+        },
+      ],
+      workGroups: [],
+      works: [],
+      recordings: [],
+    });
+
+    const group = buildOwnerEntity(library, "person", {
+      name: "柏林爱乐",
+      nameLatin: "Berlin Philharmonic",
+      roles: ["orchestra"],
+      aliases: [],
+      summary: "",
+      country: "德国",
+      countries: ["德国"],
+      slug: "贝多芬",
+      sortKey: "0010",
+      infoPanel: { text: "", articleId: "", collectionLinks: [] },
+    }) as LibraryData["people"][number];
+
+    expect(group.id).toBe("person-柏林爱乐");
+    expect(group.slug).toBe("柏林爱乐");
+    expect(group.sortKey).toBe("0020");
+  });
 });

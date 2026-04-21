@@ -30,7 +30,7 @@ describe("default library usage guide quality", () => {
   it("documents the bundled install-directory default library instead of app-data storage", () => {
     const article = createDefaultLibraryArticles("2026-04-19T00:00:00.000Z")[0];
 
-    expect(article?.markdown).toContain("安装目录中的 `library` 文件夹");
+    expect(article?.markdown).toContain("安装目录里的 `library` 文件夹");
     expect(article?.markdown).not.toContain("%APPDATA%");
   });
 });

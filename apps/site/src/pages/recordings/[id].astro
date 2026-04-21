@@ -178,7 +178,7 @@ const renderCreditLabel = (credit: Credit) => {
                   data-local-resource-link={link.linkType === "local" ? "true" : undefined}
                   title={link.metadataTitle || link.localPath || undefined}
                 >
-                  {link.label}
+                  {link.metadataTitle || link.label || "链接"}
                 </a>
               </li>
             ))}

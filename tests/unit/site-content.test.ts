@@ -193,7 +193,7 @@ describe("mergeSiteConfigPatch", () => {
       about: ["第一段", "第二段"],
       contact: {
         label: "联系",
-        value: "QQ 123456",
+        value: "contact@example.test",
       },
       copyrightNotice: "旧版权",
       lastImportedAt: "2026-03-07T15:13:50.982Z",
@@ -204,7 +204,7 @@ describe("mergeSiteConfigPatch", () => {
         subtitle: "新的副标题",
         about: ["新的第一段"],
         contact: {
-          value: "QQ 439183718",
+          value: "contact@example.test",
         },
       }),
     ).toEqual({
@@ -218,7 +218,7 @@ describe("mergeSiteConfigPatch", () => {
       about: ["新的第一段"],
       contact: {
         label: "联系",
-        value: "QQ 439183718",
+        value: "contact@example.test",
       },
       copyrightNotice: "旧版权",
       lastImportedAt: "2026-03-07T15:13:50.982Z",

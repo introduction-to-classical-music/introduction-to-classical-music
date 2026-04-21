@@ -6,6 +6,7 @@ output
 target
 .tmp
 .tmp-owner
+tmp/
 .playwright-cli
 .codex
 .codex-handoff

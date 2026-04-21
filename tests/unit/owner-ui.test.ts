@@ -606,4 +606,31 @@ describe("owner ui helpers", () => {
     expect(script).toContain("if (!visible && input.checked) {");
     expect(script).toContain("input.checked = false");
   });
+
+  it("hard-resets incompatible loaded entries when switching between person and group tabs", async () => {
+    const script = await fs.readFile(path.resolve("apps/owner/web/app.js"), "utf8");
+
+    expect(script).toContain("const getDetailTabFormKey = (tabName) => {");
+    expect(script).toContain("const isDetailTabEntityCompatible = (tabName, entity) => {");
+    expect(script).toContain('const currentTab = document.querySelector("[data-detail-tab].is-active")?.dataset?.detailTab || ""');
+    expect(script).toContain("if (!options.preserveLoadedEntity && currentTab && currentTab !== requestedTab && targetForm) {");
+    expect(script).toContain('if ((requestedTab === "person" || requestedTab === "group") && personForm) {');
+    expect(script).toContain("resetEntityForm(personForm)");
+    expect(script).toContain('setActiveDetailTab(button.dataset.detailTab)');
+    expect(script).toContain("preserveLoadedEntity: true");
+  });
+
+  it("drops auto-managed slug and sortKey fields when creating a fresh named entity", async () => {
+    const script = await fs.readFile(path.resolve("apps/owner/web/app.js"), "utf8");
+
+    expect(script).toContain("const existingId = compact(form.elements.existingId.value);");
+    expect(script).toContain('slug: existingId ? compact(form.elements.slug.value) : ""');
+    expect(script).toContain('sortKey: existingId ? compact(form.elements.sortKey.value) : ""');
+  });
+
+  it("renders recording resource buttons with the user-provided link title when available", async () => {
+    const page = await fs.readFile(path.resolve("apps/site/src/pages/recordings/[id].astro"), "utf8");
+
+    expect(page).toContain('{link.metadataTitle || link.label || "链接"}');
+  });
 });

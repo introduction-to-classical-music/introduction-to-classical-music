@@ -571,7 +571,7 @@ describe("auditLibraryData", () => {
         workTypeHint: "orchestral",
         missingRoles: ["orchestra_or_ensemble"],
         sourcePath: "legacy/recording-1.htm",
-        details: ["archive 缂哄皯鍏抽敭缃插悕"],
+        details: ["archive 缺少关键署名"],
       },
     ];
 

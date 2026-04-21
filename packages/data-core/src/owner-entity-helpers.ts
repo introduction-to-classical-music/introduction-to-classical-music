@@ -72,8 +72,73 @@ function uniqueStrings(values: unknown[]) {
   return items;
 }
 
+const personOnlyRoles = new Set(["composer", "conductor", "soloist", "singer"]);
+const groupOnlyRoles = new Set(["orchestra", "ensemble", "chorus"]);
+
+function classifyPersonRoleFamily(roles: unknown[] = []) {
+  const normalizedRoles = uniqueStrings(Array.isArray(roles) ? roles : []);
+  const hasPersonOnlyRole = normalizedRoles.some((role) => personOnlyRoles.has(role));
+  const hasGroupOnlyRole = normalizedRoles.some((role) => groupOnlyRoles.has(role));
+  return {
+    hasPersonOnlyRole,
+    hasGroupOnlyRole,
+  };
+}
+
+function shouldForkPersonEntityId(
+  existing: LibraryData["people"][number] | null,
+  incomingRoles: unknown[] = [],
+) {
+  if (!existing) {
+    return false;
+  }
+
+  const currentFamily = classifyPersonRoleFamily(existing.roles || []);
+  const incomingFamily = classifyPersonRoleFamily(incomingRoles);
+
+  return (
+    (currentFamily.hasPersonOnlyRole && !currentFamily.hasGroupOnlyRole && incomingFamily.hasGroupOnlyRole && !incomingFamily.hasPersonOnlyRole) ||
+    (currentFamily.hasGroupOnlyRole && !currentFamily.hasPersonOnlyRole && incomingFamily.hasPersonOnlyRole && !incomingFamily.hasGroupOnlyRole)
+  );
+}
+
 function nextSortKey(collection: ArrayLike<unknown>) {
   return createSortKey(collection.length);
+}
+
+function buildFreshNamedEntityIdentity(
+  prefix: "composer" | "person",
+  payload: OwnerEntityPayload,
+  collection: Array<{ id: string; slug?: string }>,
+  existingEntity: { id: string; slug?: string } | null,
+) {
+  const identitySource = compactText(payload.name || payload.nameLatin || payload.slug || prefix);
+  const existingIds = new Set(collection.map((item) => item.id));
+  const existingSlugs = new Set(
+    collection
+      .filter((item) => item.id !== existingEntity?.id)
+      .map((item) => compactText(item.slug || ""))
+      .filter(Boolean),
+  );
+
+  if (existingEntity) {
+    return {
+      id: existingEntity.id,
+      slug: compactText(existingEntity.slug || payload.slug || "") || createSlug(identitySource),
+    };
+  }
+
+  return {
+    id: ensureUniqueValue(createEntityId(prefix, identitySource), existingIds),
+    slug: ensureUniqueValue(createSlug(identitySource), existingSlugs),
+  };
+}
+
+function resolveManagedSortKey(
+  existingSortKey: unknown,
+  collection: ArrayLike<unknown>,
+) {
+  return compactText(existingSortKey || "") || nextSortKey(collection);
 }
 
 function parseNumber(value: unknown) {
@@ -384,9 +449,11 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
   const workSlugSource = buildWorkSlugSource(payload);
 
   if (entityType === "composer") {
+    const existingComposer = payload.id ? library.composers.find((item) => item.id === payload.id) || null : null;
+    const composerIdentity = buildFreshNamedEntityIdentity("composer", payload, library.composers || [], existingComposer);
     return {
-      id: payload.id || createEntityId("composer", compactText(payload.slug || payload.name || "")),
-      slug: compactText(payload.slug || "") || createSlug(payload.name || ""),
+      id: composerIdentity.id,
+      slug: composerIdentity.slug,
       name: compactText(payload.name || ""),
       nameLatin: compactText(payload.nameLatin || ""),
       country: parseCountryValues(payload.countries || payload.country)[0] || "",
@@ -400,16 +467,24 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
       deathYear: parseNumber(payload.deathYear),
       roles: payload.roles?.length ? payload.roles : ["composer"],
       aliases: parseList(payload.aliases),
-      sortKey: compactText(payload.sortKey || "") || nextSortKey(library.composers),
+      sortKey: resolveManagedSortKey(existingComposer?.sortKey, library.composers),
       summary: compactText(payload.summary || ""),
       infoPanel,
     };
   }
 
   if (entityType === "person") {
+    const existingPerson = payload.id ? library.people.find((item) => item.id === payload.id) || null : null;
+    const forkEntityId = shouldForkPersonEntityId(existingPerson, payload.roles || []);
+    const personIdentity = buildFreshNamedEntityIdentity(
+      "person",
+      payload,
+      library.people || [],
+      !forkEntityId ? existingPerson : null,
+    );
     return {
-      id: payload.id || createEntityId("person", compactText(payload.slug || payload.name || "")),
-      slug: compactText(payload.slug || "") || createSlug(payload.name || ""),
+      id: personIdentity.id,
+      slug: personIdentity.slug,
       name: compactText(payload.name || ""),
       nameLatin: compactText(payload.nameLatin || ""),
       country: parseCountryValues(payload.countries || payload.country)[0] || "",
@@ -423,13 +498,14 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
       deathYear: parseNumber(payload.deathYear),
       roles: payload.roles?.length ? payload.roles : ["other"],
       aliases: parseList(payload.aliases),
-      sortKey: compactText(payload.sortKey || "") || nextSortKey(library.people),
+      sortKey: resolveManagedSortKey(!forkEntityId ? existingPerson?.sortKey : "", library.people),
       summary: compactText(payload.summary || ""),
       infoPanel,
     };
   }
 
   if (entityType === "work") {
+    const existingWork = payload.id ? library.works.find((item) => item.id === payload.id) || null : null;
     const normalizedGroupPath = normalizeGroupPath(payload.groupPath || []);
     const groupIds = ensureWorkGroups(
       library,
@@ -447,7 +523,7 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
       catalogue: compactText(payload.catalogue || ""),
       summary: compactText(payload.summary || ""),
       infoPanel,
-      sortKey: compactText(payload.sortKey || "") || nextSortKey(library.works),
+      sortKey: resolveManagedSortKey(existingWork?.sortKey, library.works),
       updatedAt: timestamp,
     };
   }

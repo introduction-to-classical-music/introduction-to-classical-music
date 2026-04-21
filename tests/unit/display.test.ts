@@ -596,11 +596,11 @@ describe("display normalization", () => {
         {
           id: "soloist-a",
           slug: "soloist-a",
-          name: "榻愰粯灏旀浖",
-          fullName: "榻愰粯灏旀浖",
+          name: "齐默尔曼",
+          fullName: "齐默尔曼",
           nameLatin: "Zimmermann",
-          displayName: "榻愰粯灏旀浖",
-          displayFullName: "榻愰粯灏旀浖",
+          displayName: "齐默尔曼",
+          displayFullName: "齐默尔曼",
           displayLatinName: "Zimmermann",
           country: "Poland",
           avatarSrc: "",
@@ -617,11 +617,11 @@ describe("display normalization", () => {
         {
           id: "soloist-b",
           slug: "soloist-b",
-          name: "璇哄▋鍏?",
-          fullName: "璇哄▋鍏?",
+          name: "诺瓦克",
+          fullName: "诺瓦克",
           nameLatin: "Nowak",
-          displayName: "璇哄▋鍏?",
-          displayFullName: "璇哄▋鍏?",
+          displayName: "诺瓦克",
+          displayFullName: "诺瓦克",
           displayLatinName: "Nowak",
           country: "Poland",
           avatarSrc: "",
@@ -653,8 +653,8 @@ describe("display normalization", () => {
 
     const model = buildRecordingDisplayModel(chamberLibrary.recordings[0], chamberLibrary);
 
-    expect(model.title).toContain("榻愰粯灏旀浖");
-    expect(model.title).toContain("璇哄▋鍏?");
+    expect(model.title).toContain("齐默尔曼");
+    expect(model.title).toContain("诺瓦克");
     expect(model.subtitle).toContain("Zimmermann");
     expect(model.subtitle).toContain("Nowak");
   });
