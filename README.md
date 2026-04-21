@@ -146,6 +146,7 @@ npm run package:windows
 - 首发版本不提供应用内自动更新
 - 默认资料库是空模板，不是演示资料库
 - 本地资源链接只在当前设备有效
+- 桌面源码仓库、便携版资产和互联网部署站点采用分离工作区，边界说明见 [docs/release/PROJECT_BOUNDARIES.md](E:/Workspace/codex/introduction-to-classical-music-public/docs/release/PROJECT_BOUNDARIES.md)
 
 ## 你可以在哪里继续阅读
 

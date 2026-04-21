@@ -88,6 +88,8 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain("seedFromLegacy: false");
     expect(mainProcess).toContain("PORTABLE_EXECUTABLE_DIR");
     expect(mainProcess).toContain("portable-release.marker");
+    expect(mainProcess).toContain('path.join(packagedPortableSiteStageDir, "index.html")');
+    expect(mainProcess).toContain('path.resolve(shellRootDir, "output", "portable-site-staging")');
     expect(mainProcess).toContain("openPortableLibrarySite");
     expect(mainProcess).toContain(".icm-build-meta.json");
     expect(mainProcess).toContain("module pre-window setup");

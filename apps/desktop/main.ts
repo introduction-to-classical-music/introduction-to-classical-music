@@ -46,8 +46,12 @@ const runtimeRootDir = app.isPackaged ? shellRootDir.replace(`${path.sep}app.asa
 const launcherHtmlPath = path.resolve(runtimeRootDir, "apps", "desktop", "launcher.html");
 const desktopPreloadPath = path.resolve(shellRootDir, "output", "runtime", "apps", "desktop", "preload.js");
 const desktopAssetDir = path.resolve(shellRootDir, "apps", "desktop", "assets");
-const packagedPortableSiteDir = path.resolve(shellRootDir, "output", "site");
 const portableReleaseMarkerPath = app.isPackaged ? path.join(process.resourcesPath, "portable-release.marker") : "";
+const packagedPortableSiteStageDir = path.resolve(shellRootDir, "output", "portable-site-staging");
+const packagedPortableSiteDir =
+  app.isPackaged && existsSync(path.join(packagedPortableSiteStageDir, "index.html"))
+    ? packagedPortableSiteStageDir
+    : path.resolve(shellRootDir, "output", "site");
 const desktopIconPath = path.resolve(
   desktopAssetDir,
   process.platform === "win32" ? "app-icon.ico" : "app-icon.png",
