@@ -65,12 +65,13 @@ describe("resource links", () => {
       localPath: "D:\\Music\\Bruckner\\Symphony7.flac",
       title: "Bruckner 7",
       linkType: "local",
-      visibility: "local-only",
+      visibility: "public",
     });
 
     const presentation = getResourceLinkPresentation(normalized);
     expect(presentation.label).toBe("本地文件");
     expect(presentation.linkType).toBe("local");
+    expect(presentation.visibility).toBe("public");
     expect(presentation.href).toContain("/__local-resource?path=");
     expect(decodeURIComponent(presentation.href.split("path=")[1] || "")).toBe("D:\\Music\\Bruckner\\Symphony7.flac");
   });

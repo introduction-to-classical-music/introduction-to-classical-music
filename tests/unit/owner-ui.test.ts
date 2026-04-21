@@ -583,4 +583,27 @@ describe("owner ui helpers", () => {
     expect(script).toContain('return `/api/remote-image?url=${encodeURIComponent(normalized)}`;');
     expect(script).toContain('<img src="${escapeHtml(buildOwnerRemoteImagePreviewUrl(candidate.src))}"');
   });
+
+  it("renders related entity controls with a blank default option and an explicit unlink action", async () => {
+    const script = await fs.readFile(path.resolve("apps/owner/web/app.js"), "utf8");
+
+    expect(script).toContain("data-related-entity-clear");
+    expect(script).toContain("请选择");
+    expect(script).toContain("取消关联");
+  });
+
+  it("removes the resource-link visibility selector and saves recording links from the structured editor payload", async () => {
+    const html = await fs.readFile(path.resolve("apps/owner/web/index.html"), "utf8");
+    const script = await fs.readFile(path.resolve("apps/owner/web/app.js"), "utf8");
+
+    expect(html).not.toContain('name="visibility"');
+    expect(script).toContain('links: parseBatchLinkLines(getRecordingLinksField(form)?.value || form.elements.links.value || "")');
+  });
+
+  it("resets hidden person roles when switching into the group editor mode", async () => {
+    const script = await fs.readFile(path.resolve("apps/owner/web/app.js"), "utf8");
+
+    expect(script).toContain("if (!visible && input.checked) {");
+    expect(script).toContain("input.checked = false");
+  });
 });

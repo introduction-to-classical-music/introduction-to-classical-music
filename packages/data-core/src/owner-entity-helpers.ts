@@ -11,6 +11,7 @@ export type OwnerEntityRelation = {
   title: string;
   subtitle: string;
   groupLabel: string;
+  canUnlink?: boolean;
 };
 
 type OwnerEntityPayload = {
@@ -516,6 +517,80 @@ function getManagedComposerById(library: LibraryData, composerId: string) {
   return getManagedComposers(library).find((item) => item.id === composerId) || null;
 }
 
+function unlinkRecordingCreditByPersonId(
+  library: LibraryData,
+  recordingId: string,
+  personId: string,
+) {
+  const recording = library.recordings.find((item) => item.id === recordingId);
+  if (!recording) {
+    throw new Error("Entity not found");
+  }
+  const nextCredits = (recording.credits || []).filter((credit) => compactText(credit.personId || "") !== personId);
+  if (nextCredits.length === (recording.credits || []).length) {
+    throw new Error("当前关联不可解除。");
+  }
+  recording.credits = nextCredits;
+}
+
+export function canUnlinkOwnerEntityRelation(
+  library: LibraryData,
+  entityType: OwnerEditableEntityType,
+  entityId: string,
+  relatedType: OwnerEditableEntityType,
+  relatedId: string,
+) {
+  const normalizedLibrary = getNormalizedOwnerLibrary(library);
+  const normalizedEntityId = compactText(entityId);
+  const normalizedRelatedId = compactText(relatedId);
+
+  if (!normalizedEntityId || !normalizedRelatedId) {
+    return false;
+  }
+
+  if ((entityType === "person" || entityType === "composer") && relatedType === "recording") {
+    return normalizedLibrary.recordings.some(
+      (item) =>
+        item.id === normalizedRelatedId &&
+        (item.credits || []).some((credit) => compactText(credit.personId || "") === normalizedEntityId),
+    );
+  }
+
+  if (entityType === "recording" && (relatedType === "person" || relatedType === "composer")) {
+    return normalizedLibrary.recordings.some(
+      (item) =>
+        item.id === normalizedEntityId &&
+        (item.credits || []).some((credit) => compactText(credit.personId || "") === normalizedRelatedId),
+    );
+  }
+
+  return false;
+}
+
+export function unlinkOwnerEntityRelation(
+  library: LibraryData,
+  entityType: OwnerEditableEntityType,
+  entityId: string,
+  relatedType: OwnerEditableEntityType,
+  relatedId: string,
+): LibraryData {
+  const normalizedLibrary = structuredClone(getNormalizedOwnerLibrary(library));
+  const normalizedEntityId = compactText(entityId);
+  const normalizedRelatedId = compactText(relatedId);
+
+  if ((entityType === "person" || entityType === "composer") && relatedType === "recording") {
+    unlinkRecordingCreditByPersonId(normalizedLibrary, normalizedRelatedId, normalizedEntityId);
+    return getNormalizedOwnerLibrary(normalizedLibrary);
+  }
+
+  if (entityType === "recording" && (relatedType === "person" || relatedType === "composer")) {
+    unlinkRecordingCreditByPersonId(normalizedLibrary, normalizedEntityId, normalizedRelatedId);
+    return getNormalizedOwnerLibrary(normalizedLibrary);
+  }
+
+  throw new Error("当前关联不可解除。");
+}
+
 function entityCollectionByType(library: LibraryData, entityType: OwnerEditableEntityType) {
   if (entityType === "composer") {
     return getManagedComposers(library);
@@ -603,6 +678,7 @@ export function collectOwnerEntityRelations(library: LibraryData, entityType: Ow
     if (!relation) {
       return;
     }
+    relation.canUnlink = canUnlinkOwnerEntityRelation(normalizedLibrary, entityType, entityId, relation.entityType, relation.id);
     const key = `${relation.entityType}:${relation.id}`;
     if (seen.has(key)) {
       return;

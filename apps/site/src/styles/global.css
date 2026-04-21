@@ -253,7 +253,9 @@ summary,
 }
 
 .article-body .article-image {
-  margin: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 .article-body .article-image img {

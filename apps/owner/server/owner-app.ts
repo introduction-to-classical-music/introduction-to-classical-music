@@ -70,9 +70,11 @@ import {
 import {
   assertOwnerEntityCanDelete,
   buildOwnerEntity,
+  canUnlinkOwnerEntityRelation,
   collectOwnerEntityRelations,
   normalizeOwnerManagedLibrary,
   removeOwnerEntity,
+  unlinkOwnerEntityRelation,
 } from "../../../packages/data-core/src/owner-entity-helpers.js";
 import { createLocalSiteServer } from "../../../packages/data-core/src/local-site-server.js";
 import { openTargetInShell } from "../../../packages/data-core/src/open-target.js";
@@ -236,12 +238,7 @@ function parseStructuredLinks(value) {
           String(item?.linkType || "").trim() === "local" || (!String(item?.url || "").trim() && String(item?.localPath || item?.path || "").trim())
             ? "local"
             : "external",
-        visibility:
-          String(item?.linkType || "").trim() === "local" || (!String(item?.url || "").trim() && String(item?.localPath || item?.path || "").trim())
-            ? "local-only"
-            : String(item?.visibility || "").trim() === "local-only"
-              ? "local-only"
-              : "public",
+        visibility: String(item?.visibility || "").trim() === "local-only" ? "local-only" : "public",
       }))
       .filter((item) => (item.linkType === "local" ? item.localPath : item.url));
   }
@@ -974,6 +971,26 @@ app.delete("/api/entity/:entityType/:id", async (request, response) => {
       entityType: request.params.entityType,
       entityId: request.params.id,
       affectedPaths: getAffectedPaths(validated, request.params.entityType, request.params.id),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    response.status(message === "Entity not found" ? 404 : 400).json({ error: message });
+  }
+});
+
+app.delete("/api/entity/:entityType/:id/relations/:relatedType/:relatedId", async (request, response) => {
+  try {
+    const library = normalizeOwnerManagedLibrary(await loadLibraryFromDisk());
+    const { entityType, id, relatedType, relatedId } = request.params;
+    if (!canUnlinkOwnerEntityRelation(library, entityType, id, relatedType, relatedId)) {
+      response.status(400).json({ error: "当前关联不可解除。" });
+      return;
+    }
+    const validated = await saveValidatedLibrary(unlinkOwnerEntityRelation(library, entityType, id, relatedType, relatedId));
+    response.json({
+      unlinked: true,
+      entity: entityCollectionByType(validated, entityType).find((item) => item.id === id),
+      relatedEntities: collectRelatedEntities(validated, entityType, id),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

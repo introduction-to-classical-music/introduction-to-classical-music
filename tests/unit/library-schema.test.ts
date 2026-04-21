@@ -261,7 +261,7 @@ describe("validateLibrary", () => {
     ]);
   });
 
-  it("accepts local resource links and normalizes them to local-only", () => {
+  it("accepts local resource links while keeping them renderable in generated site output", () => {
     const library = validateLibrary({
       ...baseLibrary,
       recordings: [
@@ -287,7 +287,7 @@ describe("validateLibrary", () => {
         localPath: "D:\\Music\\Karajan1963.flac",
         title: "Karajan 1963 local file",
         linkType: "local",
-        visibility: "local-only",
+        visibility: "public",
       },
     ]);
   });

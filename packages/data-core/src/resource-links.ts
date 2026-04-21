@@ -51,7 +51,7 @@ export function normalizeResourceLink(link: ResourceLink): ResourceLink {
     localPath: normalizedLocalPath,
     title: (link.title ?? "").trim(),
     linkType,
-    visibility: linkType === "local" ? "local-only" : link.visibility === "local-only" ? "local-only" : "public",
+    visibility: link.visibility === "local-only" ? "local-only" : "public",
   };
 }
 

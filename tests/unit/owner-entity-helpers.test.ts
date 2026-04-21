@@ -4,9 +4,11 @@ import { validateLibrary, type LibraryData } from "@/lib/schema";
 import {
   assertOwnerEntityCanDelete,
   buildOwnerEntity,
+  canUnlinkOwnerEntityRelation,
   collectOwnerEntityRelations,
   normalizeOwnerManagedLibrary,
   removeOwnerEntity,
+  unlinkOwnerEntityRelation,
 } from "../../packages/data-core/src/owner-entity-helpers.js";
 
 describe("owner entity helpers", () => {
@@ -408,5 +410,141 @@ describe("owner entity helpers", () => {
     const withoutPerson = removeOwnerEntity(withoutWork, "person", "person-mahler");
     expect(withoutPerson.people.find((item) => item.id === "person-mahler")).toBeUndefined();
     expect(withoutPerson.composers.find((item) => item.id === "person-mahler")).toBeUndefined();
+  });
+
+  it("can unlink a non-required person-to-recording relation by removing the matching credit", () => {
+    const library = validateLibrary({
+      composers: [],
+      people: [
+        {
+          id: "person-mahler",
+          slug: "gustav-mahler",
+          name: "Gustav Mahler",
+          nameLatin: "Gustav Mahler",
+          roles: ["composer", "conductor"],
+          aliases: [],
+          sortKey: "0010",
+          summary: "",
+          country: "Austria",
+          countries: ["Austria"],
+          avatarSrc: "",
+          imageSourceUrl: "",
+          imageSourceKind: "",
+          imageAttribution: "",
+          imageUpdatedAt: "",
+          birthYear: 1860,
+          deathYear: 1911,
+          infoPanel: { text: "", articleId: "", collectionLinks: [] },
+        },
+      ],
+      workGroups: [
+        {
+          id: "group-symphony",
+          composerId: "person-mahler",
+          title: "Symphony",
+          slug: "symphony",
+          path: ["Symphony"],
+          sortKey: "0010",
+        },
+      ],
+      works: [
+        {
+          id: "work-mahler-5",
+          composerId: "person-mahler",
+          groupIds: ["group-symphony"],
+          slug: "symphony-no-5",
+          title: "Symphony No. 5",
+          titleLatin: "Symphony No. 5",
+          aliases: [],
+          catalogue: "",
+          summary: "",
+          sortKey: "0100",
+          updatedAt: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      recordings: [
+        {
+          id: "recording-mahler-1987",
+          workId: "work-mahler-5",
+          slug: "recording-mahler-1987",
+          title: "Mahler 1987",
+          sortKey: "0010",
+          isPrimaryRecommendation: false,
+          updatedAt: "2026-04-20T00:00:00.000Z",
+          images: [],
+          credits: [{ role: "conductor", personId: "person-mahler", displayName: "Gustav Mahler" }],
+          links: [],
+          notes: "",
+          performanceDateText: "1987",
+          venueText: "",
+          albumTitle: "",
+          label: "",
+          releaseDate: "",
+          infoPanel: { text: "", articleId: "", collectionLinks: [] },
+        },
+      ],
+    });
+
+    expect(canUnlinkOwnerEntityRelation(library, "person", "person-mahler", "recording", "recording-mahler-1987")).toBe(true);
+
+    const unlinked = unlinkOwnerEntityRelation(library, "person", "person-mahler", "recording", "recording-mahler-1987");
+    expect(unlinked.recordings[0]?.credits).toEqual([]);
+  });
+
+  it("rejects unlink requests for required work-to-composer relations", () => {
+    const library = validateLibrary({
+      composers: [],
+      people: [
+        {
+          id: "person-beethoven",
+          slug: "ludwig-van-beethoven",
+          name: "Ludwig van Beethoven",
+          nameLatin: "Ludwig van Beethoven",
+          roles: ["composer"],
+          aliases: [],
+          sortKey: "0010",
+          summary: "",
+          country: "Germany",
+          countries: ["Germany"],
+          avatarSrc: "",
+          imageSourceUrl: "",
+          imageSourceKind: "",
+          imageAttribution: "",
+          imageUpdatedAt: "",
+          birthYear: 1770,
+          deathYear: 1827,
+          infoPanel: { text: "", articleId: "", collectionLinks: [] },
+        },
+      ],
+      workGroups: [
+        {
+          id: "group-symphony",
+          composerId: "person-beethoven",
+          title: "Symphony",
+          slug: "symphony",
+          path: ["Symphony"],
+          sortKey: "0010",
+        },
+      ],
+      works: [
+        {
+          id: "work-beethoven-5",
+          composerId: "person-beethoven",
+          groupIds: ["group-symphony"],
+          slug: "symphony-no-5",
+          title: "Symphony No. 5",
+          titleLatin: "Symphony No. 5",
+          aliases: [],
+          catalogue: "",
+          summary: "",
+          sortKey: "0100",
+          updatedAt: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      recordings: [],
+    });
+
+    expect(canUnlinkOwnerEntityRelation(library, "person", "person-beethoven", "work", "work-beethoven-5")).toBe(false);
+    expect(() => unlinkOwnerEntityRelation(library, "person", "person-beethoven", "work", "work-beethoven-5")).toThrow();
   });
 });

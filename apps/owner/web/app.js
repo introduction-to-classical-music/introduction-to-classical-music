@@ -308,6 +308,15 @@ const configurePersonFormMode = (mode = "person") => {
     return;
   }
   form.dataset.entityMode = mode;
+  const visibleRoles = mode === "group" ? GROUP_ROLE_VALUES : PERSON_ROLE_VALUES;
+  const labels = mode === "group" ? GROUP_FORM_ROLE_LABELS : PERSON_FORM_ROLE_LABELS;
+  const checkedRoles = [...form.querySelectorAll('input[name="roles"]:checked')].map((input) => input.value);
+  const hasExistingEntity = compact(form.elements.existingId?.value || "");
+  const hasVisibleCheckedRole = checkedRoles.some((role) => visibleRoles.has(role));
+  const hasHiddenCheckedRole = checkedRoles.some((role) => !visibleRoles.has(role));
+  if (hasExistingEntity && hasHiddenCheckedRole && !hasVisibleCheckedRole) {
+    resetEntityForm(form);
+  }
   const lifeRangeInput = form.elements.lifeRange;
   if (lifeRangeInput) {
     setLeadingLabelText(lifeRangeInput, mode === "group" ? "建立时间 - 解散时间" : "生卒年");
@@ -322,14 +331,15 @@ const configurePersonFormMode = (mode = "person") => {
     mediaHint.textContent =
       mode === "group" ? "乐团、组合与合唱等团体可在这里手动上传更合适的图片。" : "人物可在这里手动上传更合适的图片。";
   }
-  const visibleRoles = mode === "group" ? GROUP_ROLE_VALUES : PERSON_ROLE_VALUES;
-  const labels = mode === "group" ? GROUP_FORM_ROLE_LABELS : PERSON_FORM_ROLE_LABELS;
   [...form.querySelectorAll('input[name="roles"]')].forEach((input) => {
     const wrapper = input.closest("label");
     if (!wrapper) {
       return;
     }
     const visible = visibleRoles.has(input.value);
+    if (!visible && input.checked) {
+      input.checked = false;
+    }
     wrapper.hidden = !visible;
     wrapper.setAttribute("aria-hidden", String(!visible));
     const textNode = [...wrapper.childNodes].find((node) => node.nodeType === Node.TEXT_NODE);
@@ -387,7 +397,7 @@ const normalizeStructuredLink = (link = {}) => {
     localPath,
     title: compact(link?.title),
     linkType,
-    visibility: linkType === "local" ? "local-only" : compact(link?.visibility) === "local-only" ? "local-only" : "public",
+    visibility: compact(link?.visibility) === "local-only" ? "local-only" : "public",
   };
 };
 const buildResourceLinkLine = (link) => {
@@ -397,7 +407,6 @@ const buildResourceLinkLine = (link) => {
     getResourceLinkTarget(normalized),
     normalized.title || "",
     normalized.linkType,
-    normalized.visibility,
   ].join(" | ");
 };
 const normalizeWorkComparableText = (value) =>
@@ -1190,13 +1199,14 @@ const ensureRelatedEntityControls = (form) => {
     <label>
       直接关联条目
       <select data-related-entity-select>
-        <option value="">当前没有直接关联条目</option>
+        <option value="">请选择</option>
       </select>
     </label>
     <div class="owner-form__actions owner-form__actions--compact">
       <button type="button" data-related-entity-jump disabled>跳转查看</button>
+      <button type="button" data-related-entity-clear disabled>取消关联</button>
     </div>
-    <p class="owner-form__hint">这里只显示一级直接关联。先跳转并解除关联，再处理删除或合并。</p>
+    <p class="owner-form__hint">这里只显示一级直接关联。请选择需要查看或解除的关联；作品与版本等必填关联不能在这里直接解除。</p>
   `;
   const mergeHost = form.querySelector("[data-merge-host]");
   if (mergeHost) {
@@ -1206,13 +1216,20 @@ const ensureRelatedEntityControls = (form) => {
   }
   const select = host.querySelector("[data-related-entity-select]");
   const jumpButton = host.querySelector("[data-related-entity-jump]");
+  const clearButton = host.querySelector("[data-related-entity-clear]");
   const syncJumpState = () => {
     const option = select?.selectedOptions?.[0];
     const relatedType = option?.dataset?.entityType || "";
     const relatedId = option?.value || "";
+    const canUnlink = option?.dataset?.canUnlink === "true";
     jumpButton.disabled = !relatedType || !relatedId;
     jumpButton.dataset.relatedEntityType = relatedType;
     jumpButton.dataset.relatedEntityId = relatedId;
+    if (clearButton) {
+      clearButton.disabled = !canUnlink || !relatedType || !relatedId;
+      clearButton.dataset.relatedEntityType = relatedType;
+      clearButton.dataset.relatedEntityId = relatedId;
+    }
   };
   select?.addEventListener("change", syncJumpState);
   jumpButton?.addEventListener("click", () => {
@@ -1222,6 +1239,22 @@ const ensureRelatedEntityControls = (form) => {
       return;
     }
     void loadEntity(relatedType, relatedId);
+  });
+  clearButton?.addEventListener("click", async () => {
+    const relatedType = compact(clearButton.dataset.relatedEntityType || "");
+    const relatedId = compact(clearButton.dataset.relatedEntityId || "");
+    const entityType = compact(form.dataset.entityForm || "");
+    const entityId = compact(form.elements.existingId?.value || "");
+    if (!entityType || !entityId || !relatedType || !relatedId) {
+      return;
+    }
+    const result = await fetchJson(
+      `/api/entity/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/relations/${encodeURIComponent(relatedType)}/${encodeURIComponent(relatedId)}`,
+      { method: "DELETE" },
+    );
+    await refreshAll();
+    await loadEntity(entityType, entityId);
+    setResult(result);
   });
   return host;
 };
@@ -1246,6 +1279,7 @@ const renderRelatedEntityControls = (form, relatedEntities = []) => {
   const count = host.querySelector("[data-related-entity-count]");
   const select = host.querySelector("[data-related-entity-select]");
   const jumpButton = host.querySelector("[data-related-entity-jump]");
+  const clearButton = host.querySelector("[data-related-entity-clear]");
   if (count) {
     count.textContent = `${normalizedEntities.length} 条`;
   }
@@ -1258,7 +1292,9 @@ const renderRelatedEntityControls = (form, relatedEntities = []) => {
       groups.get(key).push(item);
       return groups;
     }, new Map());
-    select.innerHTML = normalizedEntities.length
+    select.innerHTML =
+      `<option value="">${normalizedEntities.length ? "请选择" : "当前没有直接关联条目"}</option>` +
+      (normalizedEntities.length
       ? [...groupedEntities.entries()]
           .map(
             ([groupLabel, items]) => `
@@ -1266,7 +1302,7 @@ const renderRelatedEntityControls = (form, relatedEntities = []) => {
                 ${items
                   .map(
                     (item) => `
-                      <option value="${escapeHtml(item.id)}" data-entity-type="${escapeHtml(item.entityType)}">
+                      <option value="${escapeHtml(item.id)}" data-entity-type="${escapeHtml(item.entityType)}" data-can-unlink="${item.canUnlink ? "true" : "false"}">
                         ${escapeHtml(item.label || item.title || item.id)}
                       </option>`,
                   )
@@ -1274,15 +1310,22 @@ const renderRelatedEntityControls = (form, relatedEntities = []) => {
               </optgroup>`,
           )
           .join("")
-      : '<option value="">当前没有直接关联条目</option>';
+      : "");
+    select.value = "";
   }
   const option = select?.selectedOptions?.[0];
   const relatedType = option?.dataset?.entityType || "";
   const relatedId = option?.value || "";
+  const canUnlink = option?.dataset?.canUnlink === "true";
   if (jumpButton) {
     jumpButton.disabled = !relatedType || !relatedId;
     jumpButton.dataset.relatedEntityType = relatedType;
     jumpButton.dataset.relatedEntityId = relatedId;
+  }
+  if (clearButton) {
+    clearButton.disabled = !canUnlink || !relatedType || !relatedId;
+    clearButton.dataset.relatedEntityType = relatedType;
+    clearButton.dataset.relatedEntityId = relatedId;
   }
 };
 
@@ -1821,13 +1864,7 @@ const buildRecordingPayload = (form) => ({
   notes: compact(form.elements.notes.value),
   images: parseRecordingImageLines(form.elements.images.value),
   credits: readRecordingCreditsFromEditor(form),
-  links: parseLines(form.elements.links.value, (line) => {
-    const [platform, url, title = ""] = line.split("|").map((part) => part.trim());
-    if (!platform || !url) {
-      return null;
-    }
-    return { platform, url, title };
-  }),
+  links: parseBatchLinkLines(getRecordingLinksField(form)?.value || form.elements.links.value || ""),
   infoPanel: {
     text: compact(form.elements.infoPanelText.value),
     articleId: compact(form.elements.infoPanelArticleId.value),
@@ -1873,7 +1910,6 @@ const syncLinkDialogFieldState = () => {
   const urlField = linkDialogForm?.querySelector?.('[data-link-dialog-field="url"]');
   const localPathField = linkDialogForm?.querySelector?.('[data-link-dialog-field="localPath"]');
   const browseButton = linkDialogForm?.querySelector?.('[data-link-dialog-action="browse-local"]');
-  const visibilityInput = linkDialogForm?.elements?.visibility;
   if (urlField) {
     urlField.hidden = linkType === "local";
   }
@@ -1883,12 +1919,10 @@ const syncLinkDialogFieldState = () => {
   if (browseButton) {
     browseButton.hidden = linkType !== "local";
   }
-  if (visibilityInput && linkType === "local") {
-    visibilityInput.value = "local-only";
-  }
   if (linkDialogOpen) {
     linkDialogOpen.textContent = linkType === "local" ? "打开文件" : "打开链接";
   }
+  setLinkDialogMeta(linkType === "local" ? ["本地链接会在站点中显示，但只在当前设备有效；导出到其他设备后通常会失效。"] : []);
 };
 
 const fillRecordingLinkDialog = (link) => {
@@ -1901,9 +1935,6 @@ const fillRecordingLinkDialog = (link) => {
   if (linkDialogForm.elements.linkType) {
     linkDialogForm.elements.linkType.value = normalized.linkType;
   }
-  if (linkDialogForm.elements.visibility) {
-    linkDialogForm.elements.visibility.value = normalized.visibility;
-  }
   linkDialogForm.elements.title.value = normalized.title || "";
   syncLinkDialogFieldState();
 };
@@ -1915,7 +1946,7 @@ const readRecordingLinkDialogValue = () =>
     localPath: compact(linkDialogForm.elements.localPath?.value),
     title: compact(linkDialogForm.elements.title.value),
     linkType: compact(linkDialogForm.elements.linkType?.value || "external"),
-    visibility: compact(linkDialogForm.elements.visibility?.value || "public"),
+    visibility: "public",
   });
 
 const openManagedResourceLink = async (link) => {
@@ -2250,7 +2281,7 @@ const batchDraftFieldConfigs = {
     { field: "releaseDate", label: "发行日期" },
     { field: "notes", label: "备注", multiline: true, rows: 4 },
     { field: "credits", label: "演出信息（role | displayName | personId）", multiline: true, rows: 4 },
-    { field: "links", label: "资源链接（platform | target | title | linkType | visibility）", multiline: true, rows: 4 },
+    { field: "links", label: "资源链接（platform | target | title | linkType）", multiline: true, rows: 4 },
   ],
 };
 const getBatchDraftFieldValue = (entryType, entity, field, entry = null) => {

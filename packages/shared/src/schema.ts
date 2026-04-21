@@ -156,12 +156,7 @@ function normalizeResourceLinkInput(raw: unknown) {
   const inferredType =
     requestedType === "local" || (!requestedType && !url && localPath) ? "local" : "external";
   const requestedVisibility = compact(source.visibility);
-  const normalizedVisibility =
-    inferredType === "local"
-      ? "local-only"
-      : requestedVisibility === "local-only"
-        ? "local-only"
-        : "public";
+  const normalizedVisibility = requestedVisibility === "local-only" ? "local-only" : "public";
 
   return {
     ...source,
