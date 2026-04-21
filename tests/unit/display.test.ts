@@ -412,7 +412,7 @@ describe("display normalization", () => {
           },
           {
             ...library.people[1],
-            summary: "???Berlin Philharmonic???",
+            summary: "Berlin Philharmonic ???",
           },
           ...library.people.slice(2),
         ],
