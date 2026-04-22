@@ -74,6 +74,7 @@
     "doctor:windows": "powershell -ExecutionPolicy Bypass -File scripts/doctor-windows.ps1",
     "dev": "npm run assets:prepare && npm run build:indexes && astro dev --root apps/site --host 127.0.0.1 --port 4321",
     "build": "npm run assets:prepare && npm run runtime:build && node output/runtime/scripts/build-library-site.js",
+    "build:pages": "pnpm run build && node scripts/prepare-pages-artifact.mjs",
     "build:library": "npm run assets:prepare && npm run runtime:build && node output/runtime/scripts/build-library-site.js",
     "preview": "astro preview --root apps/site",
     "test": "vitest run",
