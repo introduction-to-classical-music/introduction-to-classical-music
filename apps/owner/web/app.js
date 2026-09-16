@@ -6259,12 +6259,26 @@ libraryCompareButton?.addEventListener("click", async () => {
       setResult({ report });
       return;
     }
+    const decisions = {};
+    for (const conflict of report.conflicts || []) {
+      for (const field of conflict.fields || []) {
+        const choice = window.prompt(
+          `${conflict.label} ${conflict.entityId} 的字段“${field.path}”存在差异。\n\n本地：${JSON.stringify(field.local, null, 2)}\n\n对方：${JSON.stringify(field.incoming, null, 2)}\n\n输入 1 保留本地，输入 2 使用对方。`,
+          "1",
+        );
+        if (choice === null) {
+          setResult("已取消合并，当前库未修改。");
+          return;
+        }
+        decisions[`${conflict.entityType}/${conflict.entityId}/${field.path}`] = choice.trim() === "2" ? "incoming" : "local";
+      }
+    }
     const merged = await fetchJson("/api/library/merge", {
       method: "POST",
-      body: JSON.stringify({ sourcePath, decisions: {} }),
+      body: JSON.stringify({ sourcePath, decisions }),
     });
     await refreshAll();
-    setResult({ message: "库已合并，冲突字段保留本地值。", report: merged.report });
+    setResult({ message: "库已合并，字段冲突已按选择处理。", report: merged.report });
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
   }

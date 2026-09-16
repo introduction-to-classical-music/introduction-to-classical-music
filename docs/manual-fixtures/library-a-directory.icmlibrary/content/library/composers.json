@@ -1,13 +1,14 @@
 [
   {
-    "id": "composer-demo",
-    "slug": "composer-demo",
-    "name": "复测作曲家",
-    "nameLatin": "Demo Composer",
+    "id": "composer-shared",
+    "slug": "composer-shared",
+    "name": "共享作曲家",
+    "nameLatin": "",
     "country": "",
     "countries": [],
+    "avatarSrc": "",
     "aliases": [],
-    "sortKey": "demo",
+    "sortKey": "composer-shared",
     "summary": "",
     "roles": [
       "composer"
@@ -16,6 +17,34 @@
       "text": "",
       "articleId": "",
       "collectionLinks": []
-    }
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  },
+  {
+    "id": "composer-a-only",
+    "slug": "composer-a-only",
+    "name": "A 独有作曲家",
+    "nameLatin": "",
+    "country": "",
+    "countries": [],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "composer-a-only",
+    "summary": "",
+    "roles": [
+      "composer"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
   }
 ]

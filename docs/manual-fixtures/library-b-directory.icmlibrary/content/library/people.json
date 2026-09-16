@@ -1,13 +1,14 @@
 [
   {
-    "id": "person-demo-conductor",
-    "slug": "person-demo-conductor",
-    "name": "复测指挥",
-    "nameLatin": "Demo Conductor",
+    "id": "person-shared-conductor",
+    "slug": "person-shared-conductor",
+    "name": "共享指挥",
+    "nameLatin": "",
     "country": "",
     "countries": [],
+    "avatarSrc": "",
     "aliases": [],
-    "sortKey": "demo-conductor",
+    "sortKey": "person-shared-conductor",
     "summary": "",
     "roles": [
       "conductor"
@@ -16,6 +17,60 @@
       "text": "",
       "articleId": "",
       "collectionLinks": []
-    }
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  },
+  {
+    "id": "person-conflict",
+    "slug": "person-conflict",
+    "name": "冲突人物-B",
+    "nameLatin": "",
+    "country": "德国",
+    "countries": [
+      "德国"
+    ],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "person-conflict",
+    "summary": "B 方人物说明",
+    "roles": [
+      "soloist"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  },
+  {
+    "id": "person-b-only",
+    "slug": "person-b-only",
+    "name": "B 独有人物",
+    "nameLatin": "",
+    "country": "",
+    "countries": [],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "person-b-only",
+    "summary": "",
+    "roles": [
+      "instrumentalist"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
   }
 ]

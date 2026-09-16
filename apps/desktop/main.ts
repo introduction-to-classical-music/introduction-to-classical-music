@@ -3,7 +3,7 @@ import type { OpenDialogOptions } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
-import { access, readFile, stat } from "node:fs/promises";
+import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -92,9 +92,13 @@ if (process.platform === "win32") {
 
 function resolvePreferredDefaultLibraryDir() {
   if (app.isPackaged) {
-    return path.join(path.dirname(process.execPath), "library");
+    return path.join(app.getPath("userData"), "libraries", "default-library");
   }
   return path.join(shellRootDir, "output", "desktop-dev-library");
+}
+
+function resolvePackagedSeedLibraryDir() {
+  return path.join(path.dirname(process.execPath), "library");
 }
 
 function isPortableRuntime() {
@@ -113,9 +117,17 @@ async function migrateLegacyInstalledLibraryIfNeeded() {
   if (!app.isPackaged || isPortableRuntime()) {
     return;
   }
-  await access(resolvePreferredDefaultLibraryDir()).catch((error) => {
-    writeDesktopLog("default installed library is missing", error);
-  });
+  const targetRoot = resolvePreferredDefaultLibraryDir();
+  try {
+    await access(targetRoot);
+    return;
+  } catch {
+    const seedRoot = resolvePackagedSeedLibraryDir();
+    await access(path.join(seedRoot, "library.manifest.json"));
+    await mkdir(path.dirname(targetRoot), { recursive: true });
+    await cp(seedRoot, targetRoot, { recursive: true, force: true });
+    writeDesktopLog(`seeded default library from ${seedRoot} to ${targetRoot}`);
+  }
 }
 
 async function loadLibraryManagerModule() {
