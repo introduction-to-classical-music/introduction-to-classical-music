@@ -41,8 +41,8 @@
     "updatedAt": "2026-09-16",
     "images": [
       {
-        "src": "/library-assets/managed/test/library-b-asset.txt",
-        "alt": "B 封面测试资源",
+        "src": "/library-assets/managed/manual-fixture/library-b-asset.txt",
+        "alt": "B 封面复测资源",
         "kind": "cover"
       }
     ],

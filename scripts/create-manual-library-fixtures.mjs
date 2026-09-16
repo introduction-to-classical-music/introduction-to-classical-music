@@ -34,7 +34,7 @@ const libraryA = {
     commonRecording,
     recording("recording-conflict", "work-conflict", "冲突版本-A", commonConductor.id, {
       notes: "A 方备注",
-      images: [{ src: "/library-assets/managed/test/library-a-asset.txt", alt: "A 封面测试资源", kind: "cover" }],
+      images: [{ src: "/library-assets/managed/manual-fixture/library-a-asset.txt", alt: "A 封面复测资源", kind: "cover" }],
       links: [{ platform: "other", url: "https://example.com/a", localPath: "", title: "A 链接", linkType: "external", visibility: "public" }],
     }),
     recording("recording-a-only", "work-a-only", "A 独有版本", commonConductor.id),
@@ -57,7 +57,7 @@ libraryB.works.push(work("work-b-only", "composer-b-only", "group-b-only", "B �
 libraryB.recordings = libraryB.recordings.filter((item) => item.id !== "recording-a-only");
 Object.assign(libraryB.recordings.find((item) => item.id === "recording-conflict"), {
   title: "冲突版本-B", notes: "B 方备注",
-  images: [{ src: "/library-assets/managed/test/library-b-asset.txt", alt: "B 封面测试资源", kind: "cover" }],
+  images: [{ src: "/library-assets/managed/manual-fixture/library-b-asset.txt", alt: "B 封面复测资源", kind: "cover" }],
   links: [{ platform: "other", url: "https://example.com/b", localPath: "", title: "B 链接", linkType: "external", visibility: "public" }],
 });
 libraryB.recordings.push(recording("recording-b-only", "work-b-only", "B 独有版本", commonConductor.id));
@@ -71,7 +71,7 @@ for (const [name, library] of Object.entries(variants)) {
   await rm(dir, { recursive: true, force: true });
   await mkdir(path.join(dir, "content", "library"), { recursive: true });
   await mkdir(path.join(dir, "content", "site"), { recursive: true });
-  await mkdir(path.join(dir, "assets", "managed", "test"), { recursive: true });
+  await mkdir(path.join(dir, "assets", "managed", "manual-fixture"), { recursive: true });
   const manifest = { schemaVersion: "library-bundle-v1", libraryId: name, libraryName: name, createdAt: "2026-09-16T00:00:00.000Z", updatedAt: "2026-09-16T00:00:00.000Z", appMinVersion: "0.1.0" };
   await writeFile(path.join(dir, "library.manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   const fileNames = { composers: "composers", people: "people", workGroups: "work-groups", works: "works", recordings: "recordings" };
@@ -81,7 +81,7 @@ for (const [name, library] of Object.entries(variants)) {
   await writeFile(path.join(dir, "content", "library", "entity-vitals-review.json"), "[]\n");
   await writeFile(path.join(dir, "content", "site", "config.json"), `${JSON.stringify({ title: `${name} 复测站点` }, null, 2)}\n`);
   await writeFile(path.join(dir, "content", "site", "articles.json"), "[]\n");
-  await writeFile(path.join(dir, "assets", "managed", "test", `${name}-asset.txt`), `${name} fixture asset\n`);
+  await writeFile(path.join(dir, "assets", "managed", "manual-fixture", `${name}-asset.txt`), `${name} fixture asset\n`);
   const archive = new AdmZip();
   archive.addLocalFile(path.join(dir, "library.manifest.json"));
   archive.addLocalFolder(path.join(dir, "content"), "content");
