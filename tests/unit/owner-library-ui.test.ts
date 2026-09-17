@@ -12,6 +12,7 @@ describe("owner library management ui wiring", () => {
     expect(ownerIndex).toContain('id="library-open-button"');
     expect(ownerIndex).toContain('id="library-import-button"');
     expect(ownerIndex).toContain('id="library-export-button"');
+    expect(ownerIndex).toContain('id="owner-input-dialog"');
     expect(ownerIndex).toContain('id="refresh-button"');
     expect(ownerIndex).toContain('class="owner-hero__actions"');
     expect(ownerStyles).toMatch(/html,\s*body\s*\{[\s\S]*overflow:\s*hidden/i);
@@ -32,6 +33,8 @@ describe("owner library management ui wiring", () => {
     expect(ownerServer).toContain('app.post("/api/library/open-site"');
     expect(ownerServer).toContain('app.post("/api/library/import"');
     expect(ownerServer).toContain('app.post("/api/library/export"');
+    expect(ownerApp).toContain("requestInput");
+    expect(ownerApp).not.toMatch(/window\.(prompt|confirm)\s*\(/);
   });
 
   it("exposes local resource link fields and open-resource wiring", async () => {

@@ -803,6 +803,38 @@ function markdownCell(value: unknown) {
   return String(value ?? "").replace(/[|\r\n]/g, " ").trim();
 }
 
+function formatRecordingTreeDetails(recording: any, peopleById: Map<string, any>) {
+  const roleLabels: Record<string, string> = {
+    conductor: "指挥",
+    soloist: "独奏者",
+    singer: "歌唱者",
+    instrumentalist: "演奏者",
+    orchestra: "乐团",
+    ensemble: "组合",
+    chorus: "合唱团",
+    composer: "作曲家",
+    other: "其他参与者",
+  };
+  const credits = Array.isArray(recording.credits) ? recording.credits : [];
+  const people = credits
+    .map((credit: any) => credit.displayName || peopleById.get(credit.personId)?.name || credit.personId || "")
+    .filter(Boolean);
+  const creditLabels = credits
+    .map((credit: any, index: number) => `${roleLabels[credit.role] || "演奏者"}：${people[index] || credit.displayName || credit.personId || "未命名"}`)
+    .filter(Boolean);
+  const performerText = creditLabels.length ? creditLabels.join("；") : "未记录指挥/演奏者";
+  const metadata = [
+    recording.title,
+    recording.albumTitle && `专辑：${recording.albumTitle}`,
+    recording.label && `厂牌：${recording.label}`,
+    recording.venueText && `地点：${recording.venueText}`,
+    recording.performanceDateText && `演出时间：${recording.performanceDateText}`,
+    recording.releaseDate && `发行时间：${recording.releaseDate}`,
+    recording.notes && `备注：${recording.notes}`,
+  ].filter(Boolean).map(markdownCell).join("；");
+  return { performerText, metadata: metadata || markdownCell(recording.id) };
+}
+
 app.get("/api/library/details", async (_request, response) => {
   try {
     const library = normalizeOwnerManagedLibrary(await loadLibraryFromDisk());
@@ -823,12 +855,15 @@ app.get("/api/library/details", async (_request, response) => {
       const composerWorks = works.filter((work) => work.composerId === composer.id);
       if (!composerWorks.length) { lines.push("- （暂无作品）", ""); continue; }
       for (const work of composerWorks) {
-        lines.push(`- 作品：${markdownCell(work.title || work.titleLatin || work.id)}`);
+        const groupNames = (work.groupIds || [])
+          .map((groupId: string) => groups.find((group) => group.id === groupId)?.title)
+          .filter(Boolean);
+        lines.push(`- 作品：${markdownCell(work.title || work.titleLatin || work.id)}${groupNames.length ? `（作品组：${markdownCell(groupNames.join("、"))}）` : ""}`);
         const workRecordings = recordings.filter((recording) => recording.workId === work.id);
         for (const recording of workRecordings) {
-          const names = [recording.conductorId, ...(recording.performerIds || []), ...(recording.orchestraIds || [])]
-            .map((id) => peopleById.get(id)?.name || id).filter(Boolean).join("、");
-          lines.push(`  - 版本：${markdownCell(recording.title || recording.id)}${names ? `（${markdownCell(names)}）` : ""}`);
+          const details = formatRecordingTreeDetails(recording, peopleById);
+          lines.push(`  - ${markdownCell(details.performerText)}`);
+          lines.push(`    - 版本：${details.metadata}`);
         }
       }
       lines.push("");
@@ -1933,8 +1968,6 @@ void startOwnerApp().catch((error) => {
   process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
   process.exitCode = 1;
 });
-
-
 
 
 

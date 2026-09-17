@@ -3,6 +3,7 @@ const libraryName = document.querySelector("#launcher-library-name");
 const detailTitle = document.querySelector("#launcher-detail-title");
 const statusHost = document.querySelector("#launcher-library-status");
 const feedback = document.querySelector("#launcher-feedback");
+const appVersion = document.querySelector("#launcher-app-version");
 const actionButtons = [...document.querySelectorAll("[data-launch-action]")];
 const libraryActionButtons = [...document.querySelectorAll("[data-library-action]")];
 const viewButtons = [...document.querySelectorAll("[data-view-action]")];
@@ -47,6 +48,7 @@ const renderLibraryStatus = async () => {
   try {
     const summary = await window.desktopLauncher.getLibraryStatus();
     const name = summary?.manifest?.libraryName || "未命名库";
+    appVersion.textContent = `版本 ${summary?.appVersion || "未知"}`;
     libraryName.textContent = name;
     detailTitle.textContent = name;
 
@@ -117,13 +119,13 @@ const runLibraryAction = async (action) => {
       return;
     }
     if (action === "export") {
-      const choice = window.prompt("请选择导出形式：1 = 单文件压缩包（推荐分享），2 = 可审计目录包。", "1");
-      if (!choice) {
+      const choice = await window.desktopLauncher.chooseExportFormat();
+      if (choice?.cancelled) {
         feedback.textContent = "已取消导出。";
         return;
       }
       feedback.textContent = "正在导出库，请稍候。";
-      const result = await window.desktopLauncher.exportLibrary(choice.trim() === "2" ? "directory" : "compressed");
+      const result = await window.desktopLauncher.exportLibrary(choice?.format || "compressed");
       if (result?.cancelled) {
         feedback.textContent = "已取消导出。";
         return;

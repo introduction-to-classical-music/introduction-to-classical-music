@@ -68,6 +68,7 @@ const state = {
   recordingLinkDialogContext: { form: null, index: -1 },
   infoPanelTextDialogContext: null,
   confirmDialogContext: null,
+  inputDialogContext: null,
 };
 
 const desktopLauncher = window.desktopLauncher || null;
@@ -190,6 +191,13 @@ const confirmDialogContent = document.querySelector("#owner-confirm-dialog-conte
 const confirmDialogClose = document.querySelector("#owner-confirm-dialog-close");
 const confirmDialogCancel = document.querySelector("#owner-confirm-dialog-cancel");
 const confirmDialogConfirm = document.querySelector("#owner-confirm-dialog-confirm");
+const inputDialog = document.querySelector("#owner-input-dialog");
+const inputDialogTitle = document.querySelector("#owner-input-dialog-title");
+const inputDialogMessage = document.querySelector("#owner-input-dialog-message");
+const inputDialogValue = document.querySelector("#owner-input-dialog-value");
+const inputDialogClose = document.querySelector("#owner-input-dialog-close");
+const inputDialogCancel = document.querySelector("#owner-input-dialog-cancel");
+const inputDialogConfirm = document.querySelector("#owner-input-dialog-confirm");
 const articlePreviewDialog = document.querySelector("#owner-article-preview-dialog");
 const articlePreviewClose = document.querySelector("#owner-article-preview-close");
 const GROUP_ROLE_VALUES = new Set(["orchestra", "ensemble", "chorus", "instrumentalist"]);
@@ -663,6 +671,27 @@ const showConfirmDialog = ({ title, message, confirmText = "确认删除", onCon
   confirmDialogConfirm.textContent = confirmText;
   confirmDialog.showModal();
 };
+
+const requestInput = ({ title = "输入", message = "", value = "", placeholder = "" } = {}) =>
+  new Promise((resolve) => {
+    state.inputDialogContext = { resolve };
+    inputDialogTitle.textContent = title;
+    inputDialogMessage.innerHTML = message ? `<p>${escapeHtml(message)}</p>` : "";
+    inputDialogValue.value = value;
+    inputDialogValue.placeholder = placeholder;
+    inputDialog.showModal();
+    inputDialogValue.focus();
+    inputDialogValue.select();
+  });
+
+const requestConfirm = ({ title = "确认操作", message = "确认继续吗？", confirmText = "确认" } = {}) =>
+  new Promise((resolve) => {
+    state.confirmDialogContext = { onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+    confirmDialogTitle.textContent = title;
+    confirmDialogContent.innerHTML = `<p>${escapeHtml(message)}</p>`;
+    confirmDialogConfirm.textContent = confirmText;
+    confirmDialog.showModal();
+  });
 const getManagedComposers = (library = state.library) => {
   const composerMap = new Map();
   [...(library?.composers || []), ...((library?.people || []).filter((item) => item?.roles?.includes("composer")))].forEach((item) => {
@@ -2022,7 +2051,7 @@ const pickLocalResourcePath = async () => {
     const result = await desktopLauncher.pickLocalResourceFile();
     return compact(result?.path || "");
   }
-  return compact(window.prompt("请输入本地文件完整路径。") || "");
+  return compact((await requestInput({ title: "选择本地文件", message: "请输入本地文件完整路径。" })) || "");
 };
 
 const removeProposalLinkCandidateRow = (row) => {
@@ -6242,7 +6271,7 @@ libraryCompareButton?.addEventListener("click", async () => {
     const sourcePath =
       (typeof desktopLauncher?.pickLibraryFolder === "function"
         ? compact((await desktopLauncher.pickLibraryFolder())?.path || "")
-        : "") || compact(window.prompt("请输入要检查或合并的对方库目录路径。") || "");
+        : "") || compact((await requestInput({ title: "选择待比较库", message: "请输入对方 .icmlibrary 文件或目录的完整路径。" })) || "");
     if (!sourcePath) return;
     const comparison = await fetchJson("/api/library/compare", {
       method: "POST",
@@ -6254,7 +6283,7 @@ libraryCompareButton?.addEventListener("click", async () => {
       setResult(summary);
       return;
     }
-    const shouldMerge = window.confirm(`${summary}\n\n确认合并？新增条目将加入本地；冲突默认保留本地字段。`);
+    const shouldMerge = await requestConfirm({ title: "确认合并库", message: `${summary}\n\n新增条目将加入本地。接下来会逐字段询问冲突处理方式。`, confirmText: "继续合并" });
     if (!shouldMerge) {
       setResult({ report });
       return;
@@ -6262,10 +6291,11 @@ libraryCompareButton?.addEventListener("click", async () => {
     const decisions = {};
     for (const conflict of report.conflicts || []) {
       for (const field of conflict.fields || []) {
-        const choice = window.prompt(
-          `${conflict.label} ${conflict.entityId} 的字段“${field.path}”存在差异。\n\n本地：${JSON.stringify(field.local, null, 2)}\n\n对方：${JSON.stringify(field.incoming, null, 2)}\n\n输入 1 保留本地，输入 2 使用对方。`,
-          "1",
-        );
+        const choice = await requestInput({
+          title: `冲突选择：${conflict.label}`,
+          message: `${conflict.entityId} 的字段“${field.path}”存在差异。输入 1 保留本地，输入 2 使用对方。\n\n本地：${JSON.stringify(field.local)}\n对方：${JSON.stringify(field.incoming)}`,
+          value: "1",
+        });
         if (choice === null) {
           setResult("已取消合并，当前库未修改。");
           return;
@@ -6307,7 +6337,7 @@ libraryDetailExportButton?.addEventListener("click", async () => {
 libraryRenameButton?.addEventListener("click", async () => {
   try {
     const current = state.libraryMeta?.manifest?.libraryName || "";
-    const libraryName = compact(window.prompt("请输入新的库名称。", current) || "");
+    const libraryName = compact((await requestInput({ title: "修改库名称", message: "请输入新的库名称。", value: current })) || "");
     if (!libraryName) return;
     const result = await fetchJson("/api/library/rename", { method: "POST", body: JSON.stringify({ libraryName }) });
     state.libraryMeta = result.libraryMeta;
@@ -6321,7 +6351,7 @@ libraryRenameButton?.addEventListener("click", async () => {
 async function promptDestination(promptText) {
   return (typeof desktopLauncher?.pickLibraryFolder === "function"
     ? compact((await desktopLauncher.pickLibraryFolder())?.path || "")
-    : "") || compact(window.prompt(promptText) || "");
+    : "") || compact((await requestInput({ title: "选择目标目录", message: promptText })) || "");
 }
 
 librarySiteExportButton?.addEventListener("click", async () => {
@@ -6412,26 +6442,66 @@ previewDialog?.addEventListener("click", (event) => {
   }
 });
 
-confirmDialogClose?.addEventListener("click", () => confirmDialog.close());
-confirmDialogCancel?.addEventListener("click", () => confirmDialog.close());
-confirmDialogConfirm?.addEventListener("click", async () => {
-  const context = state.confirmDialogContext;
-  confirmDialog.close();
-  state.confirmDialogContext = null;
-  if (!context?.onConfirm) {
-    return;
-  }
-  try {
-    await context.onConfirm();
-  } catch (error) {
-    setResult(error instanceof Error ? error.message : String(error));
-  }
-});
 confirmDialog?.addEventListener("click", (event) => {
   const card = event.target.closest(".owner-dialog__card");
   if (!card) {
     confirmDialog.close();
   }
+});
+
+const settleConfirmDialog = async (value) => {
+  const context = state.confirmDialogContext;
+  state.confirmDialogContext = null;
+  try {
+    if (value) await context?.onConfirm?.();
+    else await context?.onCancel?.();
+  } catch (error) {
+    setResult(error instanceof Error ? error.message : String(error));
+  }
+};
+
+confirmDialogClose?.addEventListener("click", () => {
+  confirmDialog.close();
+  void settleConfirmDialog(false);
+});
+confirmDialogCancel?.addEventListener("click", () => {
+  confirmDialog.close();
+  void settleConfirmDialog(false);
+});
+confirmDialogConfirm?.addEventListener("click", () => {
+  confirmDialog.close();
+  void settleConfirmDialog(true);
+});
+confirmDialog?.addEventListener("close", () => {
+  if (state.confirmDialogContext) void settleConfirmDialog(false);
+});
+
+inputDialogClose?.addEventListener("click", () => {
+  inputDialog.close();
+  const context = state.inputDialogContext;
+  state.inputDialogContext = null;
+  context?.resolve(null);
+});
+inputDialogCancel?.addEventListener("click", () => {
+  inputDialog.close();
+  const context = state.inputDialogContext;
+  state.inputDialogContext = null;
+  context?.resolve(null);
+});
+inputDialogConfirm?.addEventListener("click", () => {
+  inputDialog.close();
+  const context = state.inputDialogContext;
+  state.inputDialogContext = null;
+  context?.resolve(inputDialogValue.value);
+});
+inputDialog?.addEventListener("close", () => {
+  const context = state.inputDialogContext;
+  if (!context) return;
+  state.inputDialogContext = null;
+  context.resolve(null);
+});
+inputDialogValue?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") inputDialogConfirm.click();
 });
 
 articlePreviewClose?.addEventListener("click", () => articlePreviewDialog.close());
@@ -6524,7 +6594,7 @@ const importManagedLibraryWithPicker = async () => {
   const sourcePath =
     (typeof desktopLauncher?.pickLibraryFolder === "function"
       ? compact((await desktopLauncher.pickLibraryFolder())?.path || "")
-      : "") || compact(window.prompt("\u8bf7\u8f93\u5165\u8981\u5bfc\u5165\u7684\u5e93\u76ee\u5f55\u8def\u5f84\uff08\u5305\u542b library.manifest.json \u7684\u76ee\u5f55\uff09\u3002") || "");
+      : "") || compact((await requestInput({ title: "选择导入库", message: "请输入 .icmlibrary 文件或包含 library.manifest.json 的目录路径。" })) || "");
   if (!sourcePath) {
     return { cancelled: true };
   }
@@ -6537,11 +6607,11 @@ const importManagedLibraryWithPicker = async () => {
 };
 
 const exportManagedLibraryWithPicker = async () => {
-  const formatChoice = compact(window.prompt("请选择导出形式：1 = 单文件压缩包（推荐分享），2 = 可审计目录包。选择 Salon_library 仓库时将自动保留 Git 元数据。", "1") || "");
+  const formatChoice = compact((await requestInput({ title: "选择导出形式", message: "输入 1 导出单文件压缩包，输入 2 导出可审计目录包。选择 Salon_library 仓库时会自动保留 Git 元数据。", value: "1" })) || "");
   if (!formatChoice) return { cancelled: true };
   const destinationPath = typeof desktopLauncher?.pickDirectory === "function"
     ? compact((await desktopLauncher.pickDirectory())?.path || "")
-    : compact(window.prompt("请输入导出目标目录路径。") || "");
+    : compact((await requestInput({ title: "选择导出目录", message: "请输入导出目标目录完整路径。" })) || "");
   if (!destinationPath) return { cancelled: true };
   return fetchJson("/api/library/export", { method: "POST", body: JSON.stringify({ destinationPath, format: formatChoice === "2" ? "directory" : "compressed" }) });
 };

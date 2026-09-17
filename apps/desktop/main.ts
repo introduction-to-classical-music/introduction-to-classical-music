@@ -17,6 +17,7 @@ type ManagedService = {
 };
 
 type LibrarySummary = {
+  appVersion?: string;
   mode: string;
   rootDir: string;
   buildSiteDir: string;
@@ -147,7 +148,8 @@ async function bootstrapActiveLibraryBundle(options: {
 
 async function getActiveLibraryBundleSummary() {
   const libraryManager = await loadLibraryManagerModule();
-  return libraryManager.getActiveLibrarySummary() as Promise<LibrarySummary>;
+  const summary = await libraryManager.getActiveLibrarySummary();
+  return { ...summary, appVersion: app.getVersion() } as LibrarySummary;
 }
 
 async function importLibraryBundleAt(sourceRoot: string) {
@@ -615,6 +617,21 @@ ipcMain.handle("launcher:export-library", async (_event, format: "compressed" | 
   const libraryManager = await loadLibraryManagerModule();
   const result = await libraryManager.exportActiveLibrary(picked.path, format);
   return { cancelled: false, ...result };
+});
+
+ipcMain.handle("launcher:choose-export-format", async () => {
+  const options = {
+    type: "question" as const,
+    title: "选择导出形式",
+    message: "请选择资料库导出形式。",
+    detail: "单文件压缩包适合分享，可审计目录包适合 Git 管理。",
+    buttons: ["单文件压缩包", "可审计目录包", "取消"],
+    defaultId: 0,
+    cancelId: 2,
+  };
+  const parentWindow = getAnyDesktopWindow();
+  const result = parentWindow ? await dialog.showMessageBox(parentWindow, options) : await dialog.showMessageBox(options);
+  return { cancelled: result.response === 2, format: result.response === 1 ? "directory" : "compressed" };
 });
 
 ipcMain.handle("launcher:open-library-folder", async () => {
