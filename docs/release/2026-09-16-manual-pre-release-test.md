@@ -14,18 +14,19 @@
 | 官方 library | `repositories\library\Salon_library` |
 | 站点仓库 | `repositories\site-deploy\introduction-to-classical-music-site-deploy` |
 | 复测沙箱 | `manual-test` |
-| 清理前备份 | `archives\pretest-20260916` |
+| 清理前备份 | `archives\pretest-20260917-final` |
 
 开始前确认不全书已关闭。测试产生的数据只能写入 AppData 或 `manual-test`，不要直接修改三个正式仓库，除非步骤明确要求检查只读状态。
 
 ## 2. 干净安装与首次启动
 
 1. 打开 `local-install\buquanshu\不全书.exe`。
-2. 在启动器中查看库详情，库名称应为“默认资料库”。
-3. 点击“打开库目录”。资源管理器应打开 `%APPDATA%\buquanshu\libraries\default-library`。若资源管理器地址栏因窗口宽度压缩了反斜杠，请同时打开 `%APPDATA%\buquanshu\state.json`，确认 `activeLibraryPath` 以 `...\AppData\Roaming\buquanshu\libraries\default-library` 结尾。
-4. 失败条件：库路径指向 `local-install\buquanshu\library`。该目录只能作为只读种子，不能作为活动库。
-5. 确认作曲家、人物、作品和版本数量均为 0；默认使用手册专栏可以存在。
-6. 关闭并重新启动程序，确认路径和数量不变。
+2. 在启动器右下角查看版本号，应显示 `版本 0.1.0`；该版本来自当前安装包，不是 library 版本。
+3. 在启动器中查看库详情，库名称应为“默认资料库”。
+4. 点击“打开库目录”。资源管理器应打开 `%APPDATA%\buquanshu\libraries\default-library`。若资源管理器地址栏因窗口宽度压缩了反斜杠，请同时打开 `%APPDATA%\buquanshu\state.json`，确认 `activeLibraryPath` 以 `...\AppData\Roaming\buquanshu\libraries\default-library` 结尾。
+5. 失败条件：库路径指向 `local-install\buquanshu\library`。该目录只能作为只读种子，不能作为活动库。
+6. 确认作曲家、人物、作品和版本数量均为 0；默认使用手册专栏可以存在。
+7. 关闭并重新启动程序，确认版本、路径和数量不变。
 
 ## 3. Library 载体兼容性
 
@@ -108,4 +109,4 @@
 - 站点构建成功且不泄漏本机路径；
 - 安装版、开发版、官方库和站点仓库互不写入。
 
-任一步骤失败时停止后续写入。清理前 AppData 和旧安装相关资料保存在 `archives\pretest-20260916`；旧历史运行态仍保存在 `C:\Users\HIT-IVAFFR\AppData\Roaming\buquanshu-preinstall-20260912`。
+任一步骤失败时停止后续写入。清理前 AppData 和旧安装相关资料保存在 `archives\pretest-20260917-final`；更早的历史运行态仍保存在 `C:\Users\HIT-IVAFFR\AppData\Roaming\buquanshu-preinstall-20260912`。
