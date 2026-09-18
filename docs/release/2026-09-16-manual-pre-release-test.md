@@ -14,7 +14,7 @@
 | 官方 library | `repositories\library\Salon_library` |
 | 站点仓库 | `repositories\site-deploy\introduction-to-classical-music-site-deploy` |
 | 复测沙箱 | `manual-test` |
-| 清理前备份 | `archives\pretest-20260917-final` |
+| 清理前备份 | `archives\pretest-20260918-final` |
 
 开始前确认不全书已关闭。测试产生的数据只能写入 AppData 或 `manual-test`，不要直接修改三个正式仓库，除非步骤明确要求检查只读状态。
 
@@ -109,4 +109,4 @@
 - 站点构建成功且不泄漏本机路径；
 - 安装版、开发版、官方库和站点仓库互不写入。
 
-任一步骤失败时停止后续写入。清理前 AppData 和旧安装相关资料保存在 `archives\pretest-20260917-final`；更早的历史运行态仍保存在 `C:\Users\HIT-IVAFFR\AppData\Roaming\buquanshu-preinstall-20260912`。
+任一步骤失败时停止后续写入。清理前 AppData 和旧安装相关资料保存在 `archives\pretest-20260918-final`；更早的历史运行态仍保存在 `C:\Users\HIT-IVAFFR\AppData\Roaming\buquanshu-preinstall-20260912`。
