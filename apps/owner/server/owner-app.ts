@@ -846,9 +846,16 @@ function buildLibraryDetailsHtml(library: any) {
     const recordingCount = composerWorks.reduce((sum: number, work: any) => sum + recordings.filter((recording: any) => recording.workId === work.id).length, 0);
     return `<details class="composer"><summary>${htmlCell(composer.name || composer.id)} <span>${composerWorks.length} 部作品 / ${recordingCount} 个版本</span></summary>${workSections || '<p class="empty">暂无作品</p>'}</details>`;
   }).join("");
+  const composerIds = new Set(composers.map((composer: any) => composer.id));
+  const workIds = new Set(works.map((work: any) => work.id));
+  const orphanWorks = works.filter((work: any) => !composerIds.has(work.composerId));
+  const orphanRecordings = recordings.filter((recording: any) => !workIds.has(recording.workId));
+  const orphanSection = orphanWorks.length || orphanRecordings.length
+    ? `<details class="orphan"><summary>未关联条目</summary>${orphanWorks.length ? `<h3>未关联作曲家的作品</h3><ul>${orphanWorks.map((work: any) => `<li>${htmlCell(work.title || work.id)}</li>`).join("")}</ul>` : ""}${orphanRecordings.length ? `<h3>未关联作品的版本</h3><ul>${orphanRecordings.map((recording: any) => `<li>${htmlCell(recording.title || recording.id)}</li>`).join("")}</ul>` : ""}</details>`
+    : "";
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Library 目录详情</title><style>
     body{font-family:"Noto Serif SC","Microsoft YaHei",sans-serif;max-width:1100px;margin:0 auto;padding:32px;color:#241a12;background:#f7f3ec}h1{margin-bottom:8px}.stats{color:#685847;margin-bottom:28px}.composer,.work{background:#fff;border:1px solid #d8cfc1;margin:10px 0;padding:10px 14px}.composer>summary{font-size:1.25rem;font-weight:700}.work{margin-left:18px;background:#fcfaf6}.work>summary{font-weight:650}.composer summary,.work summary{cursor:pointer}.composer summary span,.work summary span{float:right;color:#766653;font-size:.85rem;font-weight:400}.work summary small{color:#8a6d4a}.participant{margin:12px 0 12px 36px;border-left:3px solid #9b7448;padding-left:16px}.participant h4{margin:0 0 6px}.participant li{margin:8px 0}.participant li div{color:#65584a;margin-top:3px}.empty{color:#8a8177;margin-left:24px}@media(max-width:700px){body{padding:16px}.work,.participant{margin-left:8px}.composer summary span,.work summary span{float:none;display:block;margin-top:4px}}
-  </style></head><body><h1>Library 目录详情</h1><p class="stats">生成时间：${htmlCell(new Date().toLocaleString("zh-CN", { hour12: false }))} · 作曲家 ${composers.length} · 人物/团体 ${people.length} · 作品 ${works.length} · 版本 ${recordings.length}</p><p>所有作曲家默认折叠。点击作曲家，再展开作品即可查看指挥/演奏者和版本详情。</p>${composerSections}</body></html>`;
+  </style></head><body><h1>Library 目录详情</h1><p class="stats">生成时间：${htmlCell(new Date().toLocaleString("zh-CN", { hour12: false }))} · 作曲家 ${composers.length} · 人物/团体 ${people.length} · 作品 ${works.length} · 版本 ${recordings.length}</p><p>所有作曲家默认折叠。点击作曲家，再展开作品即可查看指挥/演奏者和版本详情。</p>${composerSections}${orphanSection}</body></html>`;
 }
 
 function formatRecordingTreeDetails(recording: any, peopleById: Map<string, any>) {
