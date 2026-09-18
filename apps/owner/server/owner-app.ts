@@ -803,6 +803,54 @@ function markdownCell(value: unknown) {
   return String(value ?? "").replace(/[|\r\n]/g, " ").trim();
 }
 
+function htmlCell(value: unknown) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function getRecordingPrimaryParticipant(recording: any, peopleById: Map<string, any>) {
+  const credits = Array.isArray(recording.credits) ? recording.credits : [];
+  const priority = ["conductor", "soloist", "instrumentalist", "singer", "ensemble", "orchestra", "chorus", "other"];
+  const selected = priority.map((role) => credits.find((credit: any) => credit.role === role)).find(Boolean) || credits[0];
+  if (!selected) return { key: "unknown", label: "未记录指挥/演奏者" };
+  const roleLabels: Record<string, string> = { conductor: "指挥", soloist: "独奏者", instrumentalist: "演奏者", singer: "歌唱者", ensemble: "组合", orchestra: "乐团", chorus: "合唱团", other: "其他参与者" };
+  const name = selected.displayName || peopleById.get(selected.personId)?.name || selected.personId || "未命名";
+  return { key: `${selected.role}/${selected.personId || name}`, label: `${roleLabels[selected.role] || "演奏者"}：${name}` };
+}
+
+function buildLibraryDetailsHtml(library: any) {
+  const composers = library.composers || [];
+  const people = library.people || [];
+  const works = library.works || [];
+  const groups = library.workGroups || [];
+  const recordings = library.recordings || [];
+  const peopleById = new Map(people.map((person: any) => [person.id, person]));
+  const composerSections = composers.map((composer: any) => {
+    const composerWorks = works.filter((work: any) => work.composerId === composer.id);
+    const workSections = composerWorks.map((work: any) => {
+      const workRecordings = recordings.filter((recording: any) => recording.workId === work.id);
+      const grouped = new Map<string, { label: string; recordings: any[] }>();
+      for (const recording of workRecordings) {
+        const participant = getRecordingPrimaryParticipant(recording, peopleById);
+        const entry = grouped.get(participant.key) || { label: participant.label, recordings: [] };
+        entry.recordings.push(recording);
+        grouped.set(participant.key, entry);
+      }
+      const groupNames = (work.groupIds || []).map((id: string) => groups.find((item: any) => item.id === id)?.title).filter(Boolean);
+      const participantSections = [...grouped.values()].map((entry) => `
+        <section class="participant"><h4>${htmlCell(entry.label)}</h4><ul>${entry.recordings.map((recording) => {
+          const details = formatRecordingTreeDetails(recording, peopleById);
+          return `<li><strong>${htmlCell(recording.title || recording.id)}</strong><div>${htmlCell(details.metadata)}</div></li>`;
+        }).join("")}</ul></section>`).join("");
+      return `<details class="work"><summary>${htmlCell(work.title || work.titleLatin || work.id)}${groupNames.length ? ` <small>${htmlCell(groupNames.join(" / "))}</small>` : ""} <span>${workRecordings.length} 个版本</span></summary>${participantSections || '<p class="empty">暂无版本</p>'}</details>`;
+    }).join("");
+    const recordingCount = composerWorks.reduce((sum: number, work: any) => sum + recordings.filter((recording: any) => recording.workId === work.id).length, 0);
+    return `<details class="composer"><summary>${htmlCell(composer.name || composer.id)} <span>${composerWorks.length} 部作品 / ${recordingCount} 个版本</span></summary>${workSections || '<p class="empty">暂无作品</p>'}</details>`;
+  }).join("");
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Library 目录详情</title><style>
+    body{font-family:"Noto Serif SC","Microsoft YaHei",sans-serif;max-width:1100px;margin:0 auto;padding:32px;color:#241a12;background:#f7f3ec}h1{margin-bottom:8px}.stats{color:#685847;margin-bottom:28px}.composer,.work{background:#fff;border:1px solid #d8cfc1;margin:10px 0;padding:10px 14px}.composer>summary{font-size:1.25rem;font-weight:700}.work{margin-left:18px;background:#fcfaf6}.work>summary{font-weight:650}.composer summary,.work summary{cursor:pointer}.composer summary span,.work summary span{float:right;color:#766653;font-size:.85rem;font-weight:400}.work summary small{color:#8a6d4a}.participant{margin:12px 0 12px 36px;border-left:3px solid #9b7448;padding-left:16px}.participant h4{margin:0 0 6px}.participant li{margin:8px 0}.participant li div{color:#65584a;margin-top:3px}.empty{color:#8a8177;margin-left:24px}@media(max-width:700px){body{padding:16px}.work,.participant{margin-left:8px}.composer summary span,.work summary span{float:none;display:block;margin-top:4px}}
+  </style></head><body><h1>Library 目录详情</h1><p class="stats">生成时间：${htmlCell(new Date().toLocaleString("zh-CN", { hour12: false }))} · 作曲家 ${composers.length} · 人物/团体 ${people.length} · 作品 ${works.length} · 版本 ${recordings.length}</p><p>所有作曲家默认折叠。点击作曲家，再展开作品即可查看指挥/演奏者和版本详情。</p>${composerSections}</body></html>`;
+}
+
 function formatRecordingTreeDetails(recording: any, peopleById: Map<string, any>) {
   const roleLabels: Record<string, string> = {
     conductor: "指挥",
@@ -825,6 +873,7 @@ function formatRecordingTreeDetails(recording: any, peopleById: Map<string, any>
   const performerText = creditLabels.length ? creditLabels.join("；") : "未记录指挥/演奏者";
   const metadata = [
     recording.title,
+    creditLabels.length && `参与：${creditLabels.join("、")}`,
     recording.albumTitle && `专辑：${recording.albumTitle}`,
     recording.label && `厂牌：${recording.label}`,
     recording.venueText && `地点：${recording.venueText}`,
@@ -838,43 +887,7 @@ function formatRecordingTreeDetails(recording: any, peopleById: Map<string, any>
 app.get("/api/library/details", async (_request, response) => {
   try {
     const library = normalizeOwnerManagedLibrary(await loadLibraryFromDisk());
-    const composers = library.composers || [];
-    const people = library.people || [];
-    const works = library.works || [];
-    const groups = library.workGroups || [];
-    const recordings = library.recordings || [];
-    const peopleById = new Map(people.map((person) => [person.id, person]));
-    const composerById = new Map(composers.map((composer) => [composer.id, composer]));
-    const lines = [
-      "# Library 目录详情", "", `生成时间：${new Date().toISOString()}`, "",
-      "## 统计", "", `- 作曲家：${composers.length}`, `- 人物/团体：${people.length}`, `- 作品组：${groups.length}`, `- 作品：${works.length}`, `- 版本：${recordings.length}`, "",
-      "## 条目树", "",
-    ];
-    for (const composer of composers) {
-      lines.push(`### ${markdownCell(composer.name || composer.title || composer.id)}`);
-      const composerWorks = works.filter((work) => work.composerId === composer.id);
-      if (!composerWorks.length) { lines.push("- （暂无作品）", ""); continue; }
-      for (const work of composerWorks) {
-        const groupNames = (work.groupIds || [])
-          .map((groupId: string) => groups.find((group) => group.id === groupId)?.title)
-          .filter(Boolean);
-        lines.push(`- 作品：${markdownCell(work.title || work.titleLatin || work.id)}${groupNames.length ? `（作品组：${markdownCell(groupNames.join("、"))}）` : ""}`);
-        const workRecordings = recordings.filter((recording) => recording.workId === work.id);
-        for (const recording of workRecordings) {
-          const details = formatRecordingTreeDetails(recording, peopleById);
-          lines.push(`  - ${markdownCell(details.performerText)}`);
-          lines.push(`    - 版本：${details.metadata}`);
-        }
-      }
-      lines.push("");
-    }
-    const orphanWorks = works.filter((work) => !composerById.has(work.composerId));
-    if (orphanWorks.length) {
-      lines.push("### 未关联作曲家的作品");
-      orphanWorks.forEach((work) => lines.push(`- ${markdownCell(work.title || work.id)}`));
-      lines.push("");
-    }
-    response.type("text/markdown; charset=utf-8").set("Content-Disposition", `attachment; filename*=UTF-8''library-details-${new Date().toISOString().slice(0, 10)}.md`).send(`${lines.join("\n")}\n`);
+    response.type("text/html; charset=utf-8").set("Content-Disposition", `attachment; filename*=UTF-8''library-details-${new Date().toISOString().slice(0, 10)}.html`).send(buildLibraryDetailsHtml(library));
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -936,7 +949,7 @@ app.post("/api/library/merge", async (request, response) => {
     const sourcePath = String(request.body?.sourcePath || "").trim();
     if (!sourcePath) return response.status(400).json({ error: "Missing library source path" });
     const [local, incoming] = await Promise.all([loadLibraryFromDisk(), loadLibraryFromBundleRoot(sourcePath)]);
-    const result = await mergeLibraries(local, incoming, request.body?.decisions || {});
+    const result = await mergeLibraries(local, incoming, request.body?.decisions || {}, request.body?.resolutions || {});
     const backupRoot = path.join(runtimePaths.library.rootDir, "..", "merge-backups", new Date().toISOString().replace(/[:.]/g, "-"));
     await mkdir(path.dirname(backupRoot), { recursive: true });
     await cp(runtimePaths.library.rootDir, backupRoot, { recursive: true });
@@ -1968,6 +1981,3 @@ void startOwnerApp().catch((error) => {
   process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
   process.exitCode = 1;
 });
-
-
-

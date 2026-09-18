@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("desktopLauncher", {
   importLibrary: () => ipcRenderer.invoke("launcher:import-library"),
   exportLibrary: (format?: "compressed" | "directory") => ipcRenderer.invoke("launcher:export-library", format),
   chooseExportFormat: () => ipcRenderer.invoke("launcher:choose-export-format"),
+  renameLibrary: (libraryName: string) => ipcRenderer.invoke("desktop:rename-library", libraryName),
   openLibraryFolder: () => ipcRenderer.invoke("launcher:open-library-folder"),
   openExternal: (target: string) => ipcRenderer.invoke("desktop:open-external", target),
   pickLibraryFolder: () => ipcRenderer.invoke("desktop:pick-library-folder"),

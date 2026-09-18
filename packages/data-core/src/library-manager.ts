@@ -336,6 +336,22 @@ export async function renameActiveLibrary(libraryName: string) {
   const manifestPath = path.join(summary.rootDir, "library.manifest.json");
   const manifest = { ...summary.manifest, libraryName: normalizedName, updatedAt: new Date().toISOString() };
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  const rootName = path.basename(summary.rootDir);
+  const safeDirectoryName = sanitizeDirectoryName(normalizedName);
+  if (rootName !== safeDirectoryName && isManagedLibraryRoot(summary.rootDir)) {
+    const nextRoot = await resolveUniqueManagedLibraryRoot(normalizedName);
+    if (path.resolve(nextRoot) !== path.resolve(summary.rootDir)) {
+      await fs.rename(summary.rootDir, nextRoot);
+      process.env.ICM_ACTIVE_LIBRARY_DIR = nextRoot;
+      const activated = await activateLibrary(nextRoot, { seedFromLegacy: false });
+      const state = await loadAppState();
+      await saveAppState({
+        activeLibraryPath: nextRoot,
+        recentLibraries: (state.recentLibraries || []).filter((item) => path.resolve(item) !== path.resolve(summary.rootDir)),
+      });
+      return activated;
+    }
+  }
   return getActiveLibrarySummary();
 }
 

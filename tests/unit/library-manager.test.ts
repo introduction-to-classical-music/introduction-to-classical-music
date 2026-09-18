@@ -257,6 +257,22 @@ describe("library manager", () => {
     await expect(stat(result.backupRoot)).resolves.toBeDefined();
   });
 
+  it("renames the managed library directory together with its manifest", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "classical-library-rename-dir-"));
+    tempDirs.push(tempRoot);
+    const appDataRoot = path.join(tempRoot, "app-data");
+    const activeRoot = path.join(appDataRoot, "libraries", "old-name");
+    process.env.ICM_APP_DATA_DIR = appDataRoot;
+    process.env.ICM_ACTIVE_LIBRARY_DIR = activeRoot;
+    process.env.ICM_RUNTIME_MODE = "bundle";
+    const { activateLibrary, renameActiveLibrary } = await import("../../packages/data-core/src/library-manager.ts");
+    await activateLibrary(activeRoot, { seedFromLegacy: false });
+    const summary = await renameActiveLibrary("new-name");
+    expect(summary.rootDir).toBe(path.join(appDataRoot, "libraries", "new-name"));
+    await expect(stat(summary.rootDir)).resolves.toBeDefined();
+    await expect(stat(activeRoot)).rejects.toThrow();
+  });
+
   it("falls back to an empty managed library when no legacy seed source is available", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "classical-library-empty-fallback-"));
     tempDirs.push(tempRoot);

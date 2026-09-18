@@ -755,6 +755,40 @@
       </article>
     </dialog>
 
+    <dialog id="owner-library-conflict-dialog" class="owner-dialog">
+      <article class="owner-dialog__card owner-dialog__card--wide owner-library-conflict-dialog">
+        <div class="owner-card__header">
+          <div>
+            <h3 id="owner-library-conflict-title">处理冲突条目</h3>
+            <p id="owner-library-conflict-progress" class="owner-form__hint"></p>
+          </div>
+          <button type="button" id="owner-library-conflict-close">取消合并</button>
+        </div>
+        <div id="owner-library-conflict-fields" class="owner-library-conflict-fields"></div>
+        <div class="owner-library-conflict-sides">
+          <section>
+            <h4>本地完整信息</h4>
+            <pre id="owner-library-conflict-local"></pre>
+            <button type="button" id="owner-library-conflict-use-local">以本地信息为编辑起点</button>
+          </section>
+          <section>
+            <h4>对方完整信息</h4>
+            <pre id="owner-library-conflict-incoming"></pre>
+            <button type="button" id="owner-library-conflict-use-incoming">以对方信息为编辑起点</button>
+          </section>
+        </div>
+        <label class="owner-library-conflict-editor">
+          <span>最终保存信息（JSON，可直接修改）</span>
+          <textarea id="owner-library-conflict-resolution" spellcheck="false"></textarea>
+        </label>
+        <p id="owner-library-conflict-error" class="owner-form__hint owner-form__hint--error" hidden></p>
+        <div class="owner-form__actions">
+          <button type="button" id="owner-library-conflict-cancel">取消整个合并</button>
+          <button type="button" id="owner-library-conflict-confirm">保存此条并继续</button>
+        </div>
+      </article>
+    </dialog>
+
     <dialog id="owner-article-preview-dialog" class="owner-dialog">
       <article class="owner-dialog__card owner-dialog__card--wide">
         <div class="owner-card__header">

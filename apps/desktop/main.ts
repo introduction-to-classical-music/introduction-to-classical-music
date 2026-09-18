@@ -377,10 +377,11 @@ async function pickDirectory(title: string) {
   return { canceled: result.canceled, path: result.filePaths[0] || "" };
 }
 
-async function pickFile(title: string) {
+async function pickFile(title: string, filters?: Electron.FileFilter[]) {
   const dialogOptions: OpenDialogOptions = {
     title,
     properties: ["openFile"],
+    filters,
   };
   const parentWindow = getAnyDesktopWindow();
   const result = parentWindow ? await dialog.showOpenDialog(parentWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions);
@@ -388,14 +389,29 @@ async function pickFile(title: string) {
 }
 
 async function pickLibrarySource(title: string) {
-  const dialogOptions: OpenDialogOptions = {
-    title,
-    properties: ["openFile", "openDirectory"],
-    filters: [{ name: "不全书资料库", extensions: ["icmlibrary", "zip"] }, { name: "所有文件", extensions: ["*"] }],
-  };
   const parentWindow = getAnyDesktopWindow();
-  const result = parentWindow ? await dialog.showOpenDialog(parentWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions);
-  return { canceled: result.canceled, path: result.filePaths[0] || "" };
+  const choice = parentWindow
+    ? await dialog.showMessageBox(parentWindow, {
+      type: "question",
+      title,
+      message: "请选择资料库载体",
+      detail: "压缩包适合分享；目录包适合 Git 审查。两者内容结构相同。",
+      buttons: ["选择 .icmlibrary 文件", "选择资料库目录", "取消"],
+      cancelId: 2,
+      defaultId: 0,
+    })
+    : await dialog.showMessageBox({
+      type: "question",
+      title,
+      message: "请选择资料库载体",
+      detail: "压缩包适合分享；目录包适合 Git 审查。两者内容结构相同。",
+      buttons: ["选择 .icmlibrary 文件", "选择资料库目录", "取消"],
+      cancelId: 2,
+      defaultId: 0,
+    });
+  if (choice.response === 2) return { canceled: true, path: "" };
+  if (choice.response === 1) return pickDirectory(`${title}（目录）`);
+  return pickFile(`${title}（.icmlibrary 文件）`, [{ name: "不全书资料库", extensions: ["icmlibrary", "zip"] }, { name: "所有文件", extensions: ["*"] }]);
 }
 
 async function ensureLibraryWindow() {
@@ -653,6 +669,26 @@ ipcMain.handle("desktop:pick-library-folder", async () => {
 });
 
 ipcMain.handle("desktop:pick-directory", async () => pickDirectory("\u9009\u62e9\u76ee\u6807\u76ee\u5f55"));
+
+ipcMain.handle("desktop:rename-library", async (_event, libraryName: string) => {
+  await ensureDesktopRuntimeReady();
+  const libraryManager = await loadLibraryManagerModule();
+  const libraryMeta = await libraryManager.renameActiveLibrary(libraryName);
+  bootstrapPromise = Promise.resolve(libraryMeta as LibrarySummary);
+  setTimeout(() => {
+    void (async () => {
+      if (ownerService) {
+        await stopManagedService(ownerService);
+        ownerService = null;
+      }
+      if (ownerWindow && !ownerWindow.isDestroyed()) {
+        const service = await ensureOwnerService();
+        await ownerWindow.loadURL(service.url);
+      }
+    })().catch((error) => writeDesktopLog("restart owner service after library rename failed", error));
+  }, 150);
+  return { renamed: true, libraryMeta };
+});
 
 ipcMain.handle("desktop:pick-local-resource-file", async () => {
   return pickFile("\u9009\u62e9\u672c\u5730\u8d44\u6e90\u6587\u4ef6");

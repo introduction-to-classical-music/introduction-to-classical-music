@@ -69,6 +69,7 @@ const state = {
   infoPanelTextDialogContext: null,
   confirmDialogContext: null,
   inputDialogContext: null,
+  libraryConflictDialogContext: null,
 };
 
 const desktopLauncher = window.desktopLauncher || null;
@@ -198,6 +199,19 @@ const inputDialogValue = document.querySelector("#owner-input-dialog-value");
 const inputDialogClose = document.querySelector("#owner-input-dialog-close");
 const inputDialogCancel = document.querySelector("#owner-input-dialog-cancel");
 const inputDialogConfirm = document.querySelector("#owner-input-dialog-confirm");
+const libraryConflictDialog = document.querySelector("#owner-library-conflict-dialog");
+const libraryConflictTitle = document.querySelector("#owner-library-conflict-title");
+const libraryConflictProgress = document.querySelector("#owner-library-conflict-progress");
+const libraryConflictFields = document.querySelector("#owner-library-conflict-fields");
+const libraryConflictLocal = document.querySelector("#owner-library-conflict-local");
+const libraryConflictIncoming = document.querySelector("#owner-library-conflict-incoming");
+const libraryConflictResolution = document.querySelector("#owner-library-conflict-resolution");
+const libraryConflictError = document.querySelector("#owner-library-conflict-error");
+const libraryConflictUseLocal = document.querySelector("#owner-library-conflict-use-local");
+const libraryConflictUseIncoming = document.querySelector("#owner-library-conflict-use-incoming");
+const libraryConflictClose = document.querySelector("#owner-library-conflict-close");
+const libraryConflictCancel = document.querySelector("#owner-library-conflict-cancel");
+const libraryConflictConfirm = document.querySelector("#owner-library-conflict-confirm");
 const articlePreviewDialog = document.querySelector("#owner-article-preview-dialog");
 const articlePreviewClose = document.querySelector("#owner-article-preview-close");
 const GROUP_ROLE_VALUES = new Set(["orchestra", "ensemble", "chorus", "instrumentalist"]);
@@ -674,7 +688,7 @@ const showConfirmDialog = ({ title, message, confirmText = "确认删除", onCon
 
 const requestInput = ({ title = "输入", message = "", value = "", placeholder = "" } = {}) =>
   new Promise((resolve) => {
-    state.inputDialogContext = { resolve };
+    state.inputDialogContext = { resolve, settled: false };
     inputDialogTitle.textContent = title;
     inputDialogMessage.innerHTML = message ? `<p>${escapeHtml(message)}</p>` : "";
     inputDialogValue.value = value;
@@ -686,12 +700,40 @@ const requestInput = ({ title = "输入", message = "", value = "", placeholder 
 
 const requestConfirm = ({ title = "确认操作", message = "确认继续吗？", confirmText = "确认" } = {}) =>
   new Promise((resolve) => {
-    state.confirmDialogContext = { onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+    state.confirmDialogContext = { onConfirm: () => resolve(true), onCancel: () => resolve(false), settled: false };
     confirmDialogTitle.textContent = title;
     confirmDialogContent.innerHTML = `<p>${escapeHtml(message)}</p>`;
     confirmDialogConfirm.textContent = confirmText;
     confirmDialog.showModal();
   });
+
+const requestConflictResolution = (conflict, index, total) =>
+  new Promise((resolve) => {
+    state.libraryConflictDialogContext = { resolve, conflict, settled: false };
+    libraryConflictTitle.textContent = `${conflict.label}：${conflict.entityId}`;
+    libraryConflictProgress.textContent = `冲突条目 ${index + 1} / ${total}`;
+    libraryConflictLocal.textContent = JSON.stringify(conflict.local, null, 2);
+    libraryConflictIncoming.textContent = JSON.stringify(conflict.incoming, null, 2);
+    libraryConflictResolution.value = JSON.stringify(conflict.local, null, 2);
+    libraryConflictError.hidden = true;
+    libraryConflictError.textContent = "";
+    libraryConflictFields.innerHTML = (conflict.fields || []).map((field) => `
+      <article class="owner-library-conflict-field">
+        <strong>${escapeHtml(field.path)}</strong>
+        <div><span>本地</span><pre>${escapeHtml(JSON.stringify(field.local, null, 2))}</pre></div>
+        <div><span>对方</span><pre>${escapeHtml(JSON.stringify(field.incoming, null, 2))}</pre></div>
+      </article>
+    `).join("");
+    libraryConflictDialog.showModal();
+  });
+
+const settleConflictDialog = (value) => {
+  const context = state.libraryConflictDialogContext;
+  if (!context || context.settled) return;
+  context.settled = true;
+  state.libraryConflictDialogContext = null;
+  context.resolve(value);
+};
 const getManagedComposers = (library = state.library) => {
   const composerMap = new Map();
   [...(library?.composers || []), ...((library?.people || []).filter((item) => item?.roles?.includes("composer")))].forEach((item) => {
@@ -6288,24 +6330,20 @@ libraryCompareButton?.addEventListener("click", async () => {
       setResult({ report });
       return;
     }
-    const decisions = {};
-    for (const conflict of report.conflicts || []) {
-      for (const field of conflict.fields || []) {
-        const choice = await requestInput({
-          title: `冲突选择：${conflict.label}`,
-          message: `${conflict.entityId} 的字段“${field.path}”存在差异。输入 1 保留本地，输入 2 使用对方。\n\n本地：${JSON.stringify(field.local)}\n对方：${JSON.stringify(field.incoming)}`,
-          value: "1",
-        });
-        if (choice === null) {
-          setResult("已取消合并，当前库未修改。");
-          return;
-        }
-        decisions[`${conflict.entityType}/${conflict.entityId}/${field.path}`] = choice.trim() === "2" ? "incoming" : "local";
+    const resolutions = {};
+    const conflicts = report.conflicts || [];
+    for (let index = 0; index < conflicts.length; index += 1) {
+      const conflict = conflicts[index];
+      const resolution = await requestConflictResolution(conflict, index, conflicts.length);
+      if (resolution === null) {
+        setResult("已取消合并，当前库未修改。");
+        return;
       }
+      resolutions[`${conflict.entityType}/${conflict.entityId}`] = resolution;
     }
     const merged = await fetchJson("/api/library/merge", {
       method: "POST",
-      body: JSON.stringify({ sourcePath, decisions }),
+      body: JSON.stringify({ sourcePath, resolutions }),
     });
     await refreshAll();
     setResult({ message: "库已合并，字段冲突已按选择处理。", report: merged.report });
@@ -6321,7 +6359,7 @@ libraryDetailExportButton?.addEventListener("click", async () => {
     const blob = await response.blob();
     const disposition = response.headers.get("content-disposition") || "";
     const match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const fileName = match ? decodeURIComponent(match[1]) : `library-details-${new Date().toISOString().slice(0, 10)}.md`;
+    const fileName = match ? decodeURIComponent(match[1]) : `library-details-${new Date().toISOString().slice(0, 10)}.html`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -6339,7 +6377,9 @@ libraryRenameButton?.addEventListener("click", async () => {
     const current = state.libraryMeta?.manifest?.libraryName || "";
     const libraryName = compact((await requestInput({ title: "修改库名称", message: "请输入新的库名称。", value: current })) || "");
     if (!libraryName) return;
-    const result = await fetchJson("/api/library/rename", { method: "POST", body: JSON.stringify({ libraryName }) });
+    const result = typeof desktopLauncher?.renameLibrary === "function"
+      ? await desktopLauncher.renameLibrary(libraryName)
+      : await fetchJson("/api/library/rename", { method: "POST", body: JSON.stringify({ libraryName }) });
     state.libraryMeta = result.libraryMeta;
     renderLibraryStatus();
     setResult(`库名称已修改为：${libraryName}`);
@@ -6451,6 +6491,8 @@ confirmDialog?.addEventListener("click", (event) => {
 
 const settleConfirmDialog = async (value) => {
   const context = state.confirmDialogContext;
+  if (!context || context.settled) return;
+  context.settled = true;
   state.confirmDialogContext = null;
   try {
     if (value) await context?.onConfirm?.();
@@ -6460,48 +6502,76 @@ const settleConfirmDialog = async (value) => {
   }
 };
 
+const settleInputDialog = (value) => {
+  const context = state.inputDialogContext;
+  if (!context || context.settled) return;
+  context.settled = true;
+  state.inputDialogContext = null;
+  context.resolve(value);
+};
+
 confirmDialogClose?.addEventListener("click", () => {
-  confirmDialog.close();
   void settleConfirmDialog(false);
+  confirmDialog.close();
 });
 confirmDialogCancel?.addEventListener("click", () => {
-  confirmDialog.close();
   void settleConfirmDialog(false);
+  confirmDialog.close();
 });
 confirmDialogConfirm?.addEventListener("click", () => {
-  confirmDialog.close();
   void settleConfirmDialog(true);
+  confirmDialog.close();
 });
 confirmDialog?.addEventListener("close", () => {
   if (state.confirmDialogContext) void settleConfirmDialog(false);
 });
 
 inputDialogClose?.addEventListener("click", () => {
+  settleInputDialog(null);
   inputDialog.close();
-  const context = state.inputDialogContext;
-  state.inputDialogContext = null;
-  context?.resolve(null);
 });
 inputDialogCancel?.addEventListener("click", () => {
+  settleInputDialog(null);
   inputDialog.close();
-  const context = state.inputDialogContext;
-  state.inputDialogContext = null;
-  context?.resolve(null);
 });
 inputDialogConfirm?.addEventListener("click", () => {
+  settleInputDialog(inputDialogValue.value);
   inputDialog.close();
-  const context = state.inputDialogContext;
-  state.inputDialogContext = null;
-  context?.resolve(inputDialogValue.value);
 });
 inputDialog?.addEventListener("close", () => {
-  const context = state.inputDialogContext;
-  if (!context) return;
-  state.inputDialogContext = null;
-  context.resolve(null);
+  settleInputDialog(null);
 });
 inputDialogValue?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") inputDialogConfirm.click();
+});
+
+libraryConflictUseLocal?.addEventListener("click", () => {
+  const conflict = state.libraryConflictDialogContext?.conflict;
+  if (conflict) libraryConflictResolution.value = JSON.stringify(conflict.local, null, 2);
+});
+libraryConflictUseIncoming?.addEventListener("click", () => {
+  const conflict = state.libraryConflictDialogContext?.conflict;
+  if (conflict) libraryConflictResolution.value = JSON.stringify(conflict.incoming, null, 2);
+});
+const cancelConflictResolution = () => {
+  settleConflictDialog(null);
+  libraryConflictDialog.close();
+};
+libraryConflictClose?.addEventListener("click", cancelConflictResolution);
+libraryConflictCancel?.addEventListener("click", cancelConflictResolution);
+libraryConflictDialog?.addEventListener("close", () => settleConflictDialog(null));
+libraryConflictConfirm?.addEventListener("click", () => {
+  try {
+    const resolution = JSON.parse(libraryConflictResolution.value);
+    const conflict = state.libraryConflictDialogContext?.conflict;
+    if (!resolution || typeof resolution !== "object" || Array.isArray(resolution)) throw new Error("最终信息必须是 JSON 对象。");
+    if (resolution.id !== conflict?.entityId) throw new Error("条目 ID 不允许修改。");
+    settleConflictDialog(resolution);
+    libraryConflictDialog.close();
+  } catch (error) {
+    libraryConflictError.textContent = error instanceof Error ? error.message : String(error);
+    libraryConflictError.hidden = false;
+  }
 });
 
 articlePreviewClose?.addEventListener("click", () => articlePreviewDialog.close());

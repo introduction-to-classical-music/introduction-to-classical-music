@@ -1339,6 +1339,77 @@ button {
   line-height: 1.8;
 }
 
+.owner-library-conflict-dialog {
+  --owner-dialog-width: 1120px;
+}
+
+.owner-library-conflict-fields {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.owner-library-conflict-field {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 2px solid #b7682b;
+  box-shadow: 0 0 0 3px rgba(183, 104, 43, 0.12);
+  background: var(--panel-soft);
+}
+
+.owner-library-conflict-field pre,
+.owner-library-conflict-sides pre {
+  margin: 0;
+  padding: 0.65rem;
+  max-height: 16rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+}
+
+.owner-library-conflict-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.owner-library-conflict-sides section {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.owner-library-conflict-sides h4 {
+  margin: 0;
+}
+
+.owner-library-conflict-editor {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.owner-library-conflict-editor textarea {
+  width: 100%;
+  min-height: 18rem;
+  resize: vertical;
+  font-family: Consolas, "Courier New", monospace;
+  line-height: 1.45;
+}
+
+.owner-form__hint--error {
+  color: #9b2f2f;
+}
+
+@media (max-width: 900px) {
+  .owner-library-conflict-field,
+  .owner-library-conflict-sides {
+    grid-template-columns: 1fr;
+  }
+}
+
 .owner-proposal__field {
   display: grid;
   gap: 0.45rem;
