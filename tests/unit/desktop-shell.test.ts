@@ -75,6 +75,7 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain('ipcMain.handle("launcher:export-library"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:choose-export-format"');
     expect(mainProcess).toContain('ipcMain.handle("desktop:activate-library"');
+    expect(mainProcess).toContain("restartOwnerServiceAndWindowSoon");
     expect(mainProcess).toContain("app.getVersion()");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');

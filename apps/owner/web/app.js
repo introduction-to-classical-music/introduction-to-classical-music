@@ -6570,7 +6570,10 @@ libraryConflictConfirm?.addEventListener("click", () => {
     const resolution = JSON.parse(libraryConflictResolution.value);
     const conflict = state.libraryConflictDialogContext?.conflict;
     if (!resolution || typeof resolution !== "object" || Array.isArray(resolution)) throw new Error("最终信息必须是 JSON 对象。");
-    if (resolution.id !== conflict?.entityId) throw new Error("条目 ID 不允许修改。");
+    const expectedId = String(conflict?.entityId || conflict?.incoming?.id || "");
+    if (String(resolution.id || "") !== expectedId) {
+      resolution.id = expectedId;
+    }
     settleConflictDialog(resolution);
     libraryConflictDialog.close();
   } catch (error) {
