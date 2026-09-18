@@ -6346,6 +6346,9 @@ libraryCompareButton?.addEventListener("click", async () => {
       body: JSON.stringify({ sourcePath, resolutions }),
     });
     await refreshAll();
+    if (typeof desktopLauncher?.activateLibrary === "function" && merged.libraryMeta?.rootDir) {
+      await desktopLauncher.activateLibrary(merged.libraryMeta.rootDir);
+    }
     setResult({ message: "库已合并，字段冲突已按选择处理。", report: merged.report });
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
@@ -6388,17 +6391,19 @@ libraryRenameButton?.addEventListener("click", async () => {
   }
 });
 
-async function promptDestination(promptText) {
-  return (typeof desktopLauncher?.pickLibraryFolder === "function"
-    ? compact((await desktopLauncher.pickLibraryFolder())?.path || "")
+async function promptDestination(promptText, picker = "directory") {
+  return (typeof desktopLauncher?.pickDirectory === "function" && picker === "directory"
+    ? compact((await desktopLauncher.pickDirectory())?.path || "")
+    : typeof desktopLauncher?.pickLibraryFolder === "function"
+      ? compact((await desktopLauncher.pickLibraryFolder())?.path || "")
     : "") || compact((await requestInput({ title: "选择目标目录", message: promptText })) || "");
 }
 
 librarySiteExportButton?.addEventListener("click", async () => {
   try {
-    const destinationPath = await promptDestination("请选择静态网站导出目录。维护者可直接选择站点部署仓库的目标目录。");
+    const destinationPath = await promptDestination("请选择静态网站导出目录。维护者可直接选择站点部署仓库的目标目录。", "directory");
     if (!destinationPath) return;
-    const result = await fetchJson("/api/library/export-site", { method: "POST", body: JSON.stringify({ destinationPath, siteBase: "/" }) });
+    const result = await fetchJson("/api/library/export-site", { method: "POST", body: JSON.stringify({ destinationPath, siteBase: "./" }) });
     setResult(`静态网站已导出到：${result.outputDir}`);
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
@@ -6673,6 +6678,9 @@ const importManagedLibraryWithPicker = async () => {
     body: JSON.stringify({ sourcePath }),
   });
   await refreshAll();
+  if (typeof desktopLauncher?.activateLibrary === "function" && result.libraryMeta?.rootDir) {
+    await desktopLauncher.activateLibrary(result.libraryMeta.rootDir);
+  }
   return result;
 };
 

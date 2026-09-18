@@ -59,6 +59,7 @@ describe("desktop shell scaffolding", () => {
     expect(preload).toContain("importLibrary");
     expect(preload).toContain("exportLibrary");
     expect(preload).toContain("chooseExportFormat");
+    expect(preload).toContain("activateLibrary");
     expect(preload).toContain("openLibraryFolder");
     expect(preload).toContain("pickLibraryFolder");
     expect(preload).toContain("pickLocalResourceFile");
@@ -73,6 +74,7 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).not.toContain('properties: ["openFile", "openDirectory"]');
     expect(mainProcess).toContain('ipcMain.handle("launcher:export-library"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:choose-export-format"');
+    expect(mainProcess).toContain('ipcMain.handle("desktop:activate-library"');
     expect(mainProcess).toContain("app.getVersion()");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');

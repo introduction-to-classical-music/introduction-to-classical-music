@@ -690,6 +690,18 @@ ipcMain.handle("desktop:rename-library", async (_event, libraryName: string) => 
   return { renamed: true, libraryMeta };
 });
 
+ipcMain.handle("desktop:activate-library", async (_event, rootDir: string) => {
+  await ensureDesktopRuntimeReady();
+  const libraryManager = await loadLibraryManagerModule();
+  const libraryMeta = await libraryManager.activateLibrary(rootDir, { seedFromLegacy: false });
+  bootstrapPromise = Promise.resolve(libraryMeta as LibrarySummary);
+  if (ownerService) {
+    await stopManagedService(ownerService);
+    ownerService = null;
+  }
+  return { activated: true, libraryMeta };
+});
+
 ipcMain.handle("desktop:pick-local-resource-file", async () => {
   return pickFile("\u9009\u62e9\u672c\u5730\u8d44\u6e90\u6587\u4ef6");
 });

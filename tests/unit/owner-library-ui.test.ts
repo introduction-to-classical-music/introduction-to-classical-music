@@ -42,6 +42,8 @@ describe("owner library management ui wiring", () => {
     expect(ownerServer).toContain('filename*=UTF-8\'\'library-details-');
     expect(ownerServer).toContain("<details class=\"composer\"");
     expect(ownerServer).toContain("未关联条目");
+    expect(ownerApp).toContain('siteBase: "./"');
+    expect(ownerApp).toContain("pickDirectory");
   });
 
   it("exposes local resource link fields and open-resource wiring", async () => {
