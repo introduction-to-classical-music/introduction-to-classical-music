@@ -69,6 +69,7 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-owner"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-retrieval"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:import-library"');
+    expect(mainProcess).toMatch(/const summary = await importLibraryBundleAt\(picked\.path\);\s*restartOwnerServiceAndWindowSoon\(\);/s);
     expect(mainProcess).toContain('buttons: ["选择 .icmlibrary 文件", "选择资料库目录", "取消"]');
     expect(mainProcess).toContain('properties: ["openFile"]');
     expect(mainProcess).not.toContain('properties: ["openFile", "openDirectory"]');

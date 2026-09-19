@@ -351,19 +351,16 @@ function getAnyDesktopWindow() {
   return BrowserWindow.getFocusedWindow() ?? ownerWindow ?? launcherWindow ?? libraryWindow ?? retrievalWindow ?? undefined;
 }
 
-function restartOwnerServiceAndWindowSoon() {
-  setTimeout(() => {
-    void (async () => {
-      if (ownerService) {
-        await stopManagedService(ownerService);
-        ownerService = null;
-      }
-      if (ownerWindow && !ownerWindow.isDestroyed()) {
-        const service = await ensureOwnerService();
-        await ownerWindow.loadURL(service.url);
-      }
-    })().catch((error) => writeDesktopLog("restart owner service failed", error));
-  }, 150);
+async function restartOwnerServiceAndWindowSoon() {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  if (ownerService) {
+    await stopManagedService(ownerService);
+    ownerService = null;
+  }
+  if (ownerWindow && !ownerWindow.isDestroyed()) {
+    const service = await ensureOwnerService();
+    await ownerWindow.loadURL(service.url);
+  }
 }
 
 function createWindow(options: Electron.BrowserWindowConstructorOptions) {
@@ -636,6 +633,7 @@ ipcMain.handle("launcher:import-library", async () => {
     return { cancelled: true };
   }
   const summary = await importLibraryBundleAt(picked.path);
+  await restartOwnerServiceAndWindowSoon();
   return { cancelled: false, ...summary };
 });
 
@@ -690,7 +688,7 @@ ipcMain.handle("desktop:rename-library", async (_event, libraryName: string) => 
   const libraryManager = await loadLibraryManagerModule();
   const libraryMeta = await libraryManager.renameActiveLibrary(libraryName);
   bootstrapPromise = Promise.resolve(libraryMeta as LibrarySummary);
-  restartOwnerServiceAndWindowSoon();
+  await restartOwnerServiceAndWindowSoon();
   return { renamed: true, libraryMeta };
 });
 
@@ -703,7 +701,7 @@ ipcMain.handle("desktop:activate-library", async (_event, rootDir: string) => {
     await stopManagedService(ownerService);
     ownerService = null;
   }
-  restartOwnerServiceAndWindowSoon();
+  await restartOwnerServiceAndWindowSoon();
   return { activated: true, libraryMeta };
 });
 

@@ -6564,7 +6564,10 @@ const cancelConflictResolution = () => {
 };
 libraryConflictClose?.addEventListener("click", cancelConflictResolution);
 libraryConflictCancel?.addEventListener("click", cancelConflictResolution);
-libraryConflictDialog?.addEventListener("close", () => settleConflictDialog(null));
+libraryConflictDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  cancelConflictResolution();
+});
 libraryConflictConfirm?.addEventListener("click", () => {
   try {
     const resolution = JSON.parse(libraryConflictResolution.value);
