@@ -1,0 +1,62 @@
+[
+  {
+    "id": "work-unchanged",
+    "composerId": "composer-shared",
+    "groupIds": [
+      "group-shared"
+    ],
+    "slug": "work-unchanged",
+    "title": "完全相同作品",
+    "titleLatin": "",
+    "aliases": [],
+    "catalogue": "",
+    "summary": "",
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "sortKey": "work-unchanged",
+    "updatedAt": "2026-09-16"
+  },
+  {
+    "id": "work-conflict",
+    "composerId": "composer-shared",
+    "groupIds": [
+      "group-conflict"
+    ],
+    "slug": "work-conflict",
+    "title": "冲突作品-B",
+    "titleLatin": "",
+    "aliases": [],
+    "catalogue": "",
+    "summary": "B 方作品说明",
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "sortKey": "work-conflict",
+    "updatedAt": "2026-09-16"
+  },
+  {
+    "id": "work-b-only",
+    "composerId": "composer-b-only",
+    "groupIds": [
+      "group-b-only"
+    ],
+    "slug": "work-b-only",
+    "title": "B 独有作品",
+    "titleLatin": "",
+    "aliases": [],
+    "catalogue": "",
+    "summary": "",
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "sortKey": "work-b-only",
+    "updatedAt": "2026-09-16"
+  }
+]

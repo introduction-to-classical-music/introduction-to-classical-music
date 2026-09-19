@@ -17,6 +17,8 @@ import {
   libraryBundleHasLegacySeedSource,
   readLibraryBundleManifest,
   seedLibraryBundleFromLegacySource,
+  withLibraryBundleRoot,
+  writeCompressedLibraryPackage,
 } from "./library-bundle.js";
 
 function sanitizeDirectoryName(value: string) {
@@ -318,11 +320,39 @@ export async function bootstrapActiveLibrary(options: {
 }
 
 export async function importLibraryBundle(sourceRoot: string) {
-  const resolvedSourceRoot = path.resolve(sourceRoot);
-  const manifest = await readLibraryBundleManifest(resolvedSourceRoot);
-  const targetRoot = await resolveUniqueManagedLibraryRoot(manifest.libraryName || path.basename(resolvedSourceRoot));
-  await copyLibraryBundle(resolvedSourceRoot, targetRoot);
-  return activateLibrary(targetRoot);
+  return withLibraryBundleRoot(sourceRoot, async (resolvedSourceRoot) => {
+    const manifest = await readLibraryBundleManifest(resolvedSourceRoot);
+    const targetRoot = await resolveUniqueManagedLibraryRoot(manifest.libraryName || path.basename(resolvedSourceRoot));
+    await copyLibrarySourceBundle(resolvedSourceRoot, targetRoot);
+    return activateLibrary(targetRoot);
+  });
+}
+
+export async function renameActiveLibrary(libraryName: string) {
+  const normalizedName = String(libraryName || "").trim();
+  if (!normalizedName) throw new Error("Library name cannot be empty");
+  if (normalizedName.length > 120) throw new Error("Library name is too long");
+  const summary = await getActiveLibrarySummary();
+  const manifestPath = path.join(summary.rootDir, "library.manifest.json");
+  const manifest = { ...summary.manifest, libraryName: normalizedName, updatedAt: new Date().toISOString() };
+  await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  const rootName = path.basename(summary.rootDir);
+  const safeDirectoryName = sanitizeDirectoryName(normalizedName);
+  if (rootName !== safeDirectoryName && isManagedLibraryRoot(summary.rootDir)) {
+    const nextRoot = await resolveUniqueManagedLibraryRoot(normalizedName);
+    if (path.resolve(nextRoot) !== path.resolve(summary.rootDir)) {
+      await fs.rename(summary.rootDir, nextRoot);
+      process.env.ICM_ACTIVE_LIBRARY_DIR = nextRoot;
+      const activated = await activateLibrary(nextRoot, { seedFromLegacy: false });
+      const state = await loadAppState();
+      await saveAppState({
+        activeLibraryPath: nextRoot,
+        recentLibraries: (state.recentLibraries || []).filter((item) => path.resolve(item) !== path.resolve(summary.rootDir)),
+      });
+      return activated;
+    }
+  }
+  return getActiveLibrarySummary();
 }
 
 export async function exportActiveLibraryBundle(destinationDir: string) {
@@ -343,6 +373,25 @@ export async function exportActiveLibraryBundle(destinationDir: string) {
   };
 }
 
+export async function exportActiveLibraryPackage(destinationDir: string) {
+  const resolvedDestinationDir = path.resolve(destinationDir);
+  await fs.mkdir(resolvedDestinationDir, { recursive: true });
+  const summary = await getActiveLibrarySummary();
+  const packageName = `${sanitizeDirectoryName(summary.manifest.libraryName || path.basename(summary.rootDir))}.icmlibrary`;
+  const targetRoot = path.join(resolvedDestinationDir, packageName);
+  await writeCompressedLibraryPackage(summary.rootDir, targetRoot);
+  return { exported: true, sourceRoot: summary.rootDir, exportedRoot: targetRoot, manifest: summary.manifest, counts: summary.counts, format: "icmlibrary-zip-v1" };
+}
+
+export async function exportActiveLibraryDirectoryPackage(destinationDir: string) {
+  const resolvedDestinationDir = path.resolve(destinationDir);
+  await fs.mkdir(resolvedDestinationDir, { recursive: true });
+  const summary = await getActiveLibrarySummary();
+  const targetRoot = await resolveUniqueExportRoot(resolvedDestinationDir, `${summary.manifest.libraryName}.icmlibrary`);
+  await copyLibrarySourceBundle(summary.rootDir, targetRoot);
+  return { exported: true, sourceRoot: summary.rootDir, exportedRoot: targetRoot, manifest: summary.manifest, counts: summary.counts, format: "icmlibrary-directory-v1" };
+}
+
 export async function exportActiveLibrarySource(destinationDir: string) {
   const resolvedDestinationDir = path.resolve(destinationDir);
   await fs.mkdir(resolvedDestinationDir, { recursive: true });
@@ -359,4 +408,41 @@ export async function exportActiveLibrarySource(destinationDir: string) {
     manifest: summary.manifest,
     counts: summary.counts,
   };
+}
+
+export async function exportActiveLibrarySourceTo(destinationRoot: string) {
+  const resolvedTarget = path.resolve(destinationRoot);
+  const summary = await getActiveLibrarySummary();
+  if (resolvedTarget === path.resolve(summary.rootDir)) throw new Error("Export target must differ from active library");
+  let backupRoot = "";
+  const stagingRoot = `${resolvedTarget}.source-staging-${Date.now()}`;
+  try {
+    await copyLibrarySourceBundle(summary.rootDir, stagingRoot);
+    await fs.mkdir(resolvedTarget, { recursive: true });
+    backupRoot = `${resolvedTarget}.backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    await fs.mkdir(backupRoot, { recursive: true });
+    for (const relativePath of ["library.manifest.json", "content", "assets"]) {
+      const existing = path.join(resolvedTarget, relativePath);
+      try { await fs.cp(existing, path.join(backupRoot, relativePath), { recursive: true, force: true }); } catch { /* absent in a new target */ }
+      await fs.rm(existing, { recursive: true, force: true });
+      await fs.cp(path.join(stagingRoot, relativePath), existing, { recursive: true, force: true });
+    }
+    await fs.rm(stagingRoot, { recursive: true, force: true });
+    return { exported: true, sourceRoot: summary.rootDir, exportedRoot: resolvedTarget, backupRoot, manifest: summary.manifest, counts: summary.counts };
+  } catch (error) {
+    await fs.rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function exportActiveLibrary(destinationPath: string, format: "auto" | "compressed" | "directory" = "auto") {
+  const resolvedDestination = path.resolve(destinationPath);
+  const isRepositoryLibrary = await Promise.all([
+    pathExists(path.join(resolvedDestination, ".git")),
+    pathExists(path.join(resolvedDestination, "library.manifest.json")),
+  ]).then(([hasGit, hasManifest]) => hasGit && hasManifest);
+  if (isRepositoryLibrary) return exportActiveLibrarySourceTo(resolvedDestination);
+  return format === "directory"
+    ? exportActiveLibraryDirectoryPackage(resolvedDestination)
+    : exportActiveLibraryPackage(resolvedDestination);
 }

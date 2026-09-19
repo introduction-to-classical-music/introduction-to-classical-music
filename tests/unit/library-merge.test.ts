@@ -20,4 +20,13 @@ describe("library merge", () => {
     const selectedResult = await mergeLibraries(local, incoming, { "composer/a/name": "incoming" });
     expect(selectedResult.library.composers[0].name).toBe("Incoming");
   });
+
+  it("accepts a fully edited conflict resolution", async () => {
+    const local = library({ composers: [{ id: "a", name: "Local", slug: "a", sortKey: "a", summary: "local" }] });
+    const incoming = library({ composers: [{ id: "a", name: "Incoming", slug: "a", sortKey: "a", summary: "incoming" }] });
+    const resolved = { id: "a", name: "Edited", slug: "a", sortKey: "a", summary: "manual" };
+    const result = await mergeLibraries(local, incoming, {}, { "composer/a": resolved });
+    expect(result.library.composers[0].name).toBe("Edited");
+    expect(result.library.composers[0].summary).toBe("manual");
+  });
 });

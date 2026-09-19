@@ -40,6 +40,16 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm run package:windows
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ github.ref_name }}-${{ github.run_number }}
+          path: |
+            output/releases/*.exe
+            output/releases/*.blockmap
+            output/releases/latest*.yml
+          if-no-files-found: error
+          retention-days: 14
 
   windows-release:
     if: github.ref_type == 'tag'

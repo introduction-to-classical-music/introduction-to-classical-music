@@ -1,0 +1,32 @@
+[
+  {
+    "id": "group-shared",
+    "composerId": "composer-shared",
+    "title": "共享作品组",
+    "slug": "group-shared",
+    "path": [
+      "共享作品组"
+    ],
+    "sortKey": "group-shared"
+  },
+  {
+    "id": "group-conflict",
+    "composerId": "composer-shared",
+    "title": "冲突作品组-B",
+    "slug": "group-conflict",
+    "path": [
+      "冲突作品组-B"
+    ],
+    "sortKey": "group-conflict"
+  },
+  {
+    "id": "group-b-only",
+    "composerId": "composer-b-only",
+    "title": "B 独有作品组",
+    "slug": "group-b-only",
+    "path": [
+      "B 独有作品组"
+    ],
+    "sortKey": "group-b-only"
+  }
+]

@@ -44,6 +44,7 @@ describe("desktop shell scaffolding", () => {
     expect(launcherHtml).toContain('data-library-action="import"');
     expect(launcherHtml).toContain('data-library-action="export"');
     expect(launcherHtml).toContain('data-library-action="open-folder"');
+    expect(launcherHtml).toContain('id="launcher-app-version"');
     expect(launcherHtml).toContain('data-view-action="details"');
     expect(launcherHtml).toContain('data-view-action="back"');
     expect(launcherHtml).toContain('data-window-action="minimize"');
@@ -57,6 +58,8 @@ describe("desktop shell scaffolding", () => {
     expect(preload).toContain("openRetrieval");
     expect(preload).toContain("importLibrary");
     expect(preload).toContain("exportLibrary");
+    expect(preload).toContain("chooseExportFormat");
+    expect(preload).toContain("activateLibrary");
     expect(preload).toContain("openLibraryFolder");
     expect(preload).toContain("pickLibraryFolder");
     expect(preload).toContain("pickLocalResourceFile");
@@ -66,7 +69,15 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-owner"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-retrieval"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:import-library"');
+    expect(mainProcess).toMatch(/const summary = await importLibraryBundleAt\(picked\.path\);\s*await restartOwnerServiceAndWindowSoon\(\);/s);
+    expect(mainProcess).toContain('buttons: ["选择 .icmlibrary 文件", "选择资料库目录", "取消"]');
+    expect(mainProcess).toContain('properties: ["openFile"]');
+    expect(mainProcess).not.toContain('properties: ["openFile", "openDirectory"]');
     expect(mainProcess).toContain('ipcMain.handle("launcher:export-library"');
+    expect(mainProcess).toContain('ipcMain.handle("launcher:choose-export-format"');
+    expect(mainProcess).toContain('ipcMain.handle("desktop:activate-library"');
+    expect(mainProcess).toContain("restartOwnerServiceAndWindowSoon");
+    expect(mainProcess).toContain("app.getVersion()");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');
     expect(mainProcess).toContain('ipcMain.handle("desktop:pick-library-folder"');

@@ -1,13 +1,13 @@
 {
   "name": "buquanshu",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Windows-first desktop edition for building, maintaining, and browsing local classical music libraries.",
   "author": "Introduction to Classical Music Contributors",
   "private": false,
   "build": {
     "executableName": "不全书",
     "appId": "com.classical.guide.desktop.note",
-    "productName": "\u4e0d\u5168\u4e66",
+    "productName": "不全书",
     "directories": {
       "output": "output/releases"
     },
@@ -42,7 +42,7 @@
       ]
     },
     "nsis": {
-      "artifactName": "\u4e0d\u5168\u4e66 Setup ${version}.${ext}",
+      "artifactName": "不全书 Setup ${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
@@ -107,6 +107,7 @@
   "dependencies": {
     "@types/markdown-it": "^14.1.2",
     "@types/sanitize-html": "^2.16.1",
+    "adm-zip": "^0.6.1",
     "astro": "^5.18.1",
     "cheerio": "^1.2.0",
     "express": "^5.2.1",
@@ -117,6 +118,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",
+    "@types/adm-zip": "^0.5.8",
     "@types/express": "^5.0.3",
     "@types/node": "^24.12.2",
     "electron": "^41.2.1",
