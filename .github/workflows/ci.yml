@@ -43,7 +43,7 @@ jobs:
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer-${{ github.ref_name }}-${{ github.run_number }}
+          name: windows-installer-${{ github.run_id }}
           path: |
             output/releases/*.exe
             output/releases/*.blockmap
