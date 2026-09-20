@@ -20,7 +20,7 @@
 
 适合绝大多数普通用户。
 
-- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `不全书 Setup 0.1.1.exe`
+- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `buquanshu-setup-0.1.1.exe`
 - 双击安装后即可使用
 - 自带默认空资料库与《不全书使用手册》
 - 首次打开进入桌面启动器
@@ -49,7 +49,7 @@
 ### 方式一：直接安装
 
 1. 打开 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)
-2. 下载 `不全书 Setup 0.1.1.exe`
+2. 下载 `buquanshu-setup-0.1.1.exe`
 3. 双击运行安装程序
 4. 选择安装目录并完成安装
 5. 安装完成后启动 `不全书`

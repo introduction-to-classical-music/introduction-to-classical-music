@@ -6,7 +6,7 @@
 
 当前 `v0.1.1` 公开发布包括 Windows 安装版和 GitHub 源码。`v0.1.0` 的便携版为历史发布资产，不随本次更新。
 
-- Windows 安装版：`不全书 Setup 0.1.1.exe`
+- Windows 安装版：`buquanshu-setup-0.1.1.exe`
 - 历史 Windows 便携版（`v0.1.0`）：
   - `BuQuanShu-Portable-0.1.0.exe`
   - `BuQuanShu-Portable-0.1.0.zip`
