@@ -37,11 +37,11 @@
 
 - 使用稳定 `appId` 进行覆盖升级
 - 卸载程序必须可用
-- 卸载默认保留 `%APPDATA%\Introduction to Classical Music`
+- 卸载默认保留 `%APPDATA%\buquanshu`
 
 ## 发布后动作
 
-- 推送符合规范的 Tag（例如 `v0.1.1`）
+- 从已通过检查的 `main` 创建并推送符合规范的 Tag（例如 `v0.1.1`）
 - 确认 GitHub Actions 的 `windows-release` Job 成功
 - 确认 GitHub Release 已绑定同名 Tag 且包含安装版 `Setup` 产物
 - 发布或补充 Release Notes
