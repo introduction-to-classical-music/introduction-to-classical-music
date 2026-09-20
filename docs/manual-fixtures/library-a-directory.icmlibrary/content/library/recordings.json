@@ -1,0 +1,110 @@
+[
+  {
+    "id": "recording-unchanged",
+    "workId": "work-unchanged",
+    "slug": "recording-unchanged",
+    "title": "完全相同版本",
+    "workTypeHint": "unknown",
+    "sortKey": "recording-unchanged",
+    "isPrimaryRecommendation": false,
+    "updatedAt": "2026-09-16",
+    "images": [],
+    "credits": [
+      {
+        "role": "conductor",
+        "personId": "person-shared-conductor",
+        "displayName": "person-shared-conductor",
+        "label": ""
+      }
+    ],
+    "links": [],
+    "notes": "",
+    "performanceDateText": "",
+    "venueText": "",
+    "albumTitle": "",
+    "label": "",
+    "releaseDate": "",
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    }
+  },
+  {
+    "id": "recording-conflict",
+    "workId": "work-conflict",
+    "slug": "recording-conflict",
+    "title": "冲突版本-A",
+    "workTypeHint": "unknown",
+    "sortKey": "recording-conflict",
+    "isPrimaryRecommendation": false,
+    "updatedAt": "2026-09-16",
+    "images": [
+      {
+        "src": "/library-assets/managed/manual-fixture/library-a-asset.txt",
+        "alt": "A 封面复测资源",
+        "kind": "cover"
+      }
+    ],
+    "credits": [
+      {
+        "role": "conductor",
+        "personId": "person-shared-conductor",
+        "displayName": "person-shared-conductor",
+        "label": ""
+      }
+    ],
+    "links": [
+      {
+        "platform": "other",
+        "url": "https://example.com/a",
+        "localPath": "",
+        "title": "A 链接",
+        "linkType": "external",
+        "visibility": "public"
+      }
+    ],
+    "notes": "A 方备注",
+    "performanceDateText": "",
+    "venueText": "",
+    "albumTitle": "",
+    "label": "",
+    "releaseDate": "",
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    }
+  },
+  {
+    "id": "recording-a-only",
+    "workId": "work-a-only",
+    "slug": "recording-a-only",
+    "title": "A 独有版本",
+    "workTypeHint": "unknown",
+    "sortKey": "recording-a-only",
+    "isPrimaryRecommendation": false,
+    "updatedAt": "2026-09-16",
+    "images": [],
+    "credits": [
+      {
+        "role": "conductor",
+        "personId": "person-shared-conductor",
+        "displayName": "person-shared-conductor",
+        "label": ""
+      }
+    ],
+    "links": [],
+    "notes": "",
+    "performanceDateText": "",
+    "venueText": "",
+    "albumTitle": "",
+    "label": "",
+    "releaseDate": "",
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    }
+  }
+]

@@ -3,7 +3,7 @@ import type { OpenDialogOptions } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
-import { access, readFile, stat } from "node:fs/promises";
+import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ type ManagedService = {
 };
 
 type LibrarySummary = {
+  appVersion?: string;
   mode: string;
   rootDir: string;
   buildSiteDir: string;
@@ -92,9 +93,13 @@ if (process.platform === "win32") {
 
 function resolvePreferredDefaultLibraryDir() {
   if (app.isPackaged) {
-    return path.join(path.dirname(process.execPath), "library");
+    return path.join(app.getPath("userData"), "libraries", "default-library");
   }
   return path.join(shellRootDir, "output", "desktop-dev-library");
+}
+
+function resolvePackagedSeedLibraryDir() {
+  return path.join(path.dirname(process.execPath), "library");
 }
 
 function isPortableRuntime() {
@@ -113,9 +118,17 @@ async function migrateLegacyInstalledLibraryIfNeeded() {
   if (!app.isPackaged || isPortableRuntime()) {
     return;
   }
-  await access(resolvePreferredDefaultLibraryDir()).catch((error) => {
-    writeDesktopLog("default installed library is missing", error);
-  });
+  const targetRoot = resolvePreferredDefaultLibraryDir();
+  try {
+    await access(targetRoot);
+    return;
+  } catch {
+    const seedRoot = resolvePackagedSeedLibraryDir();
+    await access(path.join(seedRoot, "library.manifest.json"));
+    await mkdir(path.dirname(targetRoot), { recursive: true });
+    await cp(seedRoot, targetRoot, { recursive: true, force: true });
+    writeDesktopLog(`seeded default library from ${seedRoot} to ${targetRoot}`);
+  }
 }
 
 async function loadLibraryManagerModule() {
@@ -135,17 +148,13 @@ async function bootstrapActiveLibraryBundle(options: {
 
 async function getActiveLibraryBundleSummary() {
   const libraryManager = await loadLibraryManagerModule();
-  return libraryManager.getActiveLibrarySummary() as Promise<LibrarySummary>;
+  const summary = await libraryManager.getActiveLibrarySummary();
+  return { ...summary, appVersion: app.getVersion() } as LibrarySummary;
 }
 
 async function importLibraryBundleAt(sourceRoot: string) {
   const libraryManager = await loadLibraryManagerModule();
   return libraryManager.importLibraryBundle(sourceRoot) as Promise<LibrarySummary>;
-}
-
-async function exportActiveLibraryBundleTo(destinationDir: string) {
-  const libraryManager = await loadLibraryManagerModule();
-  return libraryManager.exportActiveLibraryBundle(destinationDir);
 }
 
 async function loadSiteBuildModule() {
@@ -342,6 +351,18 @@ function getAnyDesktopWindow() {
   return BrowserWindow.getFocusedWindow() ?? ownerWindow ?? launcherWindow ?? libraryWindow ?? retrievalWindow ?? undefined;
 }
 
+async function restartOwnerServiceAndWindowSoon() {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  if (ownerService) {
+    await stopManagedService(ownerService);
+    ownerService = null;
+  }
+  if (ownerWindow && !ownerWindow.isDestroyed()) {
+    const service = await ensureOwnerService();
+    await ownerWindow.loadURL(service.url);
+  }
+}
+
 function createWindow(options: Electron.BrowserWindowConstructorOptions) {
   return new BrowserWindow({
     autoHideMenuBar: true,
@@ -368,14 +389,41 @@ async function pickDirectory(title: string) {
   return { canceled: result.canceled, path: result.filePaths[0] || "" };
 }
 
-async function pickFile(title: string) {
+async function pickFile(title: string, filters?: Electron.FileFilter[]) {
   const dialogOptions: OpenDialogOptions = {
     title,
     properties: ["openFile"],
+    filters,
   };
   const parentWindow = getAnyDesktopWindow();
   const result = parentWindow ? await dialog.showOpenDialog(parentWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions);
   return { canceled: result.canceled, path: result.filePaths[0] || "" };
+}
+
+async function pickLibrarySource(title: string) {
+  const parentWindow = getAnyDesktopWindow();
+  const choice = parentWindow
+    ? await dialog.showMessageBox(parentWindow, {
+      type: "question",
+      title,
+      message: "请选择资料库载体",
+      detail: "压缩包适合分享；目录包适合 Git 审查。两者内容结构相同。",
+      buttons: ["选择 .icmlibrary 文件", "选择资料库目录", "取消"],
+      cancelId: 2,
+      defaultId: 0,
+    })
+    : await dialog.showMessageBox({
+      type: "question",
+      title,
+      message: "请选择资料库载体",
+      detail: "压缩包适合分享；目录包适合 Git 审查。两者内容结构相同。",
+      buttons: ["选择 .icmlibrary 文件", "选择资料库目录", "取消"],
+      cancelId: 2,
+      defaultId: 0,
+    });
+  if (choice.response === 2) return { canceled: true, path: "" };
+  if (choice.response === 1) return pickDirectory(`${title}（目录）`);
+  return pickFile(`${title}（.icmlibrary 文件）`, [{ name: "不全书资料库", extensions: ["icmlibrary", "zip"] }, { name: "所有文件", extensions: ["*"] }]);
 }
 
 async function ensureLibraryWindow() {
@@ -580,22 +628,39 @@ ipcMain.handle("launcher:open-retrieval", async () => {
 
 ipcMain.handle("launcher:import-library", async () => {
   await ensureDesktopRuntimeReady();
-  const picked = await pickDirectory("\u9009\u62e9\u8981\u5bfc\u5165\u7684\u8d44\u6599\u5e93\u76ee\u5f55");
+  const picked = await pickLibrarySource("\u9009\u62e9\u8981\u5bfc\u5165\u7684\u8d44\u6599\u5e93");
   if (picked.canceled || !picked.path) {
     return { cancelled: true };
   }
   const summary = await importLibraryBundleAt(picked.path);
+  await restartOwnerServiceAndWindowSoon();
   return { cancelled: false, ...summary };
 });
 
-ipcMain.handle("launcher:export-library", async () => {
+ipcMain.handle("launcher:export-library", async (_event, format: "compressed" | "directory" = "compressed") => {
   await ensureDesktopRuntimeReady();
   const picked = await pickDirectory("\u9009\u62e9\u5bfc\u51fa\u76ee\u5f55");
   if (picked.canceled || !picked.path) {
     return { cancelled: true };
   }
-  const result = await exportActiveLibraryBundleTo(picked.path);
+  const libraryManager = await loadLibraryManagerModule();
+  const result = await libraryManager.exportActiveLibrary(picked.path, format);
   return { cancelled: false, ...result };
+});
+
+ipcMain.handle("launcher:choose-export-format", async () => {
+  const options = {
+    type: "question" as const,
+    title: "选择导出形式",
+    message: "请选择资料库导出形式。",
+    detail: "单文件压缩包适合分享，可审计目录包适合 Git 管理。",
+    buttons: ["单文件压缩包", "可审计目录包", "取消"],
+    defaultId: 0,
+    cancelId: 2,
+  };
+  const parentWindow = getAnyDesktopWindow();
+  const result = parentWindow ? await dialog.showMessageBox(parentWindow, options) : await dialog.showMessageBox(options);
+  return { cancelled: result.response === 2, format: result.response === 1 ? "directory" : "compressed" };
 });
 
 ipcMain.handle("launcher:open-library-folder", async () => {
@@ -613,7 +678,31 @@ ipcMain.handle("desktop:open-external", async (_event, target: string) => {
 });
 
 ipcMain.handle("desktop:pick-library-folder", async () => {
-  return pickDirectory("\u9009\u62e9\u8d44\u6599\u5e93\u76ee\u5f55");
+  return pickLibrarySource("\u9009\u62e9\u8d44\u6599\u5e93\u76ee\u5f55\u6216 .icmlibrary \u6587\u4ef6");
+});
+
+ipcMain.handle("desktop:pick-directory", async () => pickDirectory("\u9009\u62e9\u76ee\u6807\u76ee\u5f55"));
+
+ipcMain.handle("desktop:rename-library", async (_event, libraryName: string) => {
+  await ensureDesktopRuntimeReady();
+  const libraryManager = await loadLibraryManagerModule();
+  const libraryMeta = await libraryManager.renameActiveLibrary(libraryName);
+  bootstrapPromise = Promise.resolve(libraryMeta as LibrarySummary);
+  await restartOwnerServiceAndWindowSoon();
+  return { renamed: true, libraryMeta };
+});
+
+ipcMain.handle("desktop:activate-library", async (_event, rootDir: string) => {
+  await ensureDesktopRuntimeReady();
+  const libraryManager = await loadLibraryManagerModule();
+  const libraryMeta = await libraryManager.activateLibrary(rootDir, { seedFromLegacy: false });
+  bootstrapPromise = Promise.resolve(libraryMeta as LibrarySummary);
+  if (ownerService) {
+    await stopManagedService(ownerService);
+    ownerService = null;
+  }
+  await restartOwnerServiceAndWindowSoon();
+  return { activated: true, libraryMeta };
 });
 
 ipcMain.handle("desktop:pick-local-resource-file", async () => {

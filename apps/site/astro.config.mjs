@@ -23,6 +23,9 @@ loadEnvFileIfExists(path.join(repoRootDir, ".env"));
 
 const normalizeBase = (value) => {
   const trimmed = String(value || "/").trim();
+  if (trimmed === "." || trimmed === "./") {
+    return "./";
+  }
   if (!trimmed || trimmed === "/") {
     return "/";
   }

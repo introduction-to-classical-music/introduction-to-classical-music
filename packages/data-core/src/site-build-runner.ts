@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { APP_VERSION, getRuntimePaths } from "./app-paths.js";
@@ -98,6 +98,31 @@ async function writeBuildMetadata(outputDir = getRuntimePaths().library.buildSit
   );
 }
 
+async function collectStaticTextFiles(rootDir: string): Promise<string[]> {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const target = path.join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectStaticTextFiles(target)));
+    } else if (/\.(html|css|js|json)$/i.test(entry.name)) {
+      files.push(target);
+    }
+  }
+  return files;
+}
+
+async function rewriteRelativeSiteLinks(outputDir: string, siteBase?: string) {
+  if (siteBase !== "./") return;
+  for (const filePath of await collectStaticTextFiles(outputDir)) {
+    const relativeDirectory = path.relative(path.dirname(filePath), outputDir).replace(/\\/g, "/");
+    const prefix = relativeDirectory ? `${relativeDirectory}/` : "./";
+    const source = await readFile(filePath, "utf8");
+    const rewritten = source.replace(/([\"'(])\/\.\/([^\"'\s)]+)/g, `$1${prefix}$2`);
+    if (rewritten !== source) await writeFile(filePath, rewritten, "utf8");
+  }
+}
+
 async function writeFileIfChanged(targetPath: string, content: string) {
   try {
     const existing = await readFile(targetPath, "utf8");
@@ -132,6 +157,7 @@ export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}) {
     assetsDir: runtimePaths.library.assetsDir,
     buildSiteDir: outputDir,
   });
+  await rewriteRelativeSiteLinks(outputDir, siteBase);
   await writeBuildRuntimeLog("buildLibrarySite: syncLibraryAssets:done");
   await writeBuildMetadata(outputDir);
   await writeBuildRuntimeLog("buildLibrarySite: writeBuildMetadata:done");

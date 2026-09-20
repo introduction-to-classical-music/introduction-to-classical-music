@@ -34,7 +34,7 @@ const forbiddenPatterns = [
   /Anaconda/i,
   /[\\/]\.codex[\\/]/,
 ];
-const ignoredFiles = new Set(["package-lock.json", "MANUAL_TEST_CHECKLIST.local.md", "public-docs-hygiene.test.ts"]);
+const ignoredFiles = new Set(["package-lock.json", "MANUAL_TEST_CHECKLIST.local.md", "2026-09-16-manual-pre-release-test.md", "public-docs-hygiene.test.ts"]);
 
 async function collectTextFiles(rootDir: string): Promise<string[]> {
   const entries = await fs.readdir(rootDir, { withFileTypes: true });

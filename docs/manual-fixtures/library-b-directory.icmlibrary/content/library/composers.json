@@ -1,0 +1,50 @@
+[
+  {
+    "id": "composer-shared",
+    "slug": "composer-shared",
+    "name": "共享作曲家",
+    "nameLatin": "",
+    "country": "",
+    "countries": [],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "composer-shared",
+    "summary": "",
+    "roles": [
+      "composer"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  },
+  {
+    "id": "composer-b-only",
+    "slug": "composer-b-only",
+    "name": "B 独有作曲家",
+    "nameLatin": "",
+    "country": "",
+    "countries": [],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "composer-b-only",
+    "summary": "",
+    "roles": [
+      "composer"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  }
+]

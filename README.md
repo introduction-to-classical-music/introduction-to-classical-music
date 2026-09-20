@@ -20,7 +20,7 @@
 
 适合绝大多数普通用户。
 
-- 在 [Releases](https://github.com/Hektor1277/introduction-to-classical-music/releases) 下载 `Setup.0.1.0.exe`
+- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `不全书 Setup 0.1.1.exe`
 - 双击安装后即可使用
 - 自带默认空资料库与《不全书使用手册》
 - 首次打开进入桌面启动器
@@ -37,7 +37,7 @@
 
 古典导聆不全书离线版，与网页端内容一致。
 
-- 在 [Releases](https://github.com/Hektor1277/introduction-to-classical-music/releases) 下载：
+- `0.1.0` 的历史便携版仍可在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载：
   - `BuQuanShu-Portable-0.1.0.exe`
   - `BuQuanShu-Portable-0.1.0.zip`
 - 便携版打开后直接进入不全书站点界面
@@ -48,8 +48,8 @@
 
 ### 方式一：直接安装
 
-1. 打开 [Releases](https://github.com/Hektor1277/introduction-to-classical-music/releases)
-2. 下载 `Setup.0.1.0.exe`
+1. 打开 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)
+2. 下载 `不全书 Setup 0.1.1.exe`
 3. 双击运行安装程序
 4. 选择安装目录并完成安装
 5. 安装完成后启动 `不全书`
@@ -59,7 +59,7 @@
 - 支持自定义安装路径
 - 安装目录中自带默认资料库
 - 支持覆盖升级
-- 卸载时删除程序目录，但不会主动删除 `%APPDATA%\Introduction to Classical Music` 中的运行数据
+- 卸载时删除程序目录，但不会主动删除 `%APPDATA%\buquanshu` 中的用户资料库
 
 ### 方式二：源码安装
 
@@ -73,7 +73,7 @@
 执行步骤：
 
 ```powershell
-git clone https://github.com/Hektor1277/introduction-to-classical-music.git
+git clone https://github.com/introduction-to-classical-music/introduction-to-classical-music.git
 cd introduction-to-classical-music
 npm run bootstrap:windows
 npm run doctor:windows
@@ -94,7 +94,7 @@ npm run package:windows
 
 ### 方式三：便携版使用
 
-1. 打开 [Releases](https://github.com/Hektor1277/introduction-to-classical-music/releases)
+1. 打开 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)
 2. 下载 `BuQuanShu-Portable-0.1.0.exe` 或 `BuQuanShu-Portable-0.1.0.zip`
 3. 直接运行，或解压 ZIP 后运行内部程序
 
@@ -158,8 +158,9 @@ npm run package:windows
 ## 更多文档
 
 - [发布文档索引](docs/release/README.md)
-- [安装说明](docs/release/0.1.0-installation-guide.md)
-- [发布说明](docs/release/0.1.0-release-notes.md)
+- [安装说明](docs/release/0.1.1-installation-guide.md)
+- [发布说明](docs/release/0.1.1-release-notes.md)
+- [维护里程碑与后续工作](docs/maintenance/0.1.1-milestone.md)
 - [发布流程](RELEASING.md)
 - [贡献说明](CONTRIBUTING.md)
 - [安全说明](SECURITY.md)

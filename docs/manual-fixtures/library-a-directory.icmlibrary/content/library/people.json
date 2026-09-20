@@ -1,0 +1,76 @@
+[
+  {
+    "id": "person-shared-conductor",
+    "slug": "person-shared-conductor",
+    "name": "共享指挥",
+    "nameLatin": "",
+    "country": "",
+    "countries": [],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "person-shared-conductor",
+    "summary": "",
+    "roles": [
+      "conductor"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  },
+  {
+    "id": "person-conflict",
+    "slug": "person-conflict",
+    "name": "冲突人物-A",
+    "nameLatin": "",
+    "country": "法国",
+    "countries": [
+      "法国"
+    ],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "person-conflict",
+    "summary": "A 方人物说明",
+    "roles": [
+      "soloist"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  },
+  {
+    "id": "person-a-only",
+    "slug": "person-a-only",
+    "name": "A 独有人物",
+    "nameLatin": "",
+    "country": "",
+    "countries": [],
+    "avatarSrc": "",
+    "aliases": [],
+    "sortKey": "person-a-only",
+    "summary": "",
+    "roles": [
+      "orchestra"
+    ],
+    "infoPanel": {
+      "text": "",
+      "articleId": "",
+      "collectionLinks": []
+    },
+    "imageSourceUrl": "",
+    "imageSourceKind": "",
+    "imageAttribution": "",
+    "imageUpdatedAt": ""
+  }
+]

@@ -12,6 +12,9 @@ describe("owner library management ui wiring", () => {
     expect(ownerIndex).toContain('id="library-open-button"');
     expect(ownerIndex).toContain('id="library-import-button"');
     expect(ownerIndex).toContain('id="library-export-button"');
+    expect(ownerIndex).toContain('id="owner-input-dialog"');
+    expect(ownerIndex).toContain('id="owner-library-conflict-dialog"');
+    expect(ownerIndex).toContain('id="owner-library-conflict-resolution"');
     expect(ownerIndex).toContain('id="refresh-button"');
     expect(ownerIndex).toContain('class="owner-hero__actions"');
     expect(ownerStyles).toMatch(/html,\s*body\s*\{[\s\S]*overflow:\s*hidden/i);
@@ -32,6 +35,15 @@ describe("owner library management ui wiring", () => {
     expect(ownerServer).toContain('app.post("/api/library/open-site"');
     expect(ownerServer).toContain('app.post("/api/library/import"');
     expect(ownerServer).toContain('app.post("/api/library/export"');
+    expect(ownerApp).toContain("requestInput");
+    expect(ownerApp).toContain("requestConflictResolution");
+    expect(ownerApp).toContain("resolutions");
+    expect(ownerApp).not.toMatch(/window\.(prompt|confirm)\s*\(/);
+    expect(ownerServer).toContain('filename*=UTF-8\'\'library-details-');
+    expect(ownerServer).toContain("<details class=\"composer\"");
+    expect(ownerServer).toContain("未关联条目");
+    expect(ownerApp).toContain('siteBase: "./"');
+    expect(ownerApp).toContain("pickDirectory");
   });
 
   it("exposes local resource link fields and open-resource wiring", async () => {
