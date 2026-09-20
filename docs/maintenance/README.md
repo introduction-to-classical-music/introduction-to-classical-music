@@ -33,4 +33,4 @@
 3. 站点发布前必须通过站点仓库的 `audit-site.ps1`。
 4. 自动化脚本默认只生成差异报告，不自动提交或推送。
 
-默认发行库快照使用 `npm run default-library:export -- --out <snapshot-dir>` 生成；它不是官方资料库，也不是编辑入口。
+默认发行库快照先运行 `npm run build`，再运行 `node scripts/export-default-library.mjs --out "<snapshot-dir>"` 生成；Windows 路径含空格时要保留引号。它不是官方资料库，也不是编辑入口。
