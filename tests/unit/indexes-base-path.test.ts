@@ -120,6 +120,7 @@ const articles = [
     title: "导览",
     summary: "",
     markdown: "",
+    showOnHome: false,
     createdAt: "2026-03-21T00:00:00.000Z",
     updatedAt: "2026-03-21T00:00:00.000Z",
   },
