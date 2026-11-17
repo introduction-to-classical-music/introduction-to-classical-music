@@ -114,4 +114,55 @@ describe("library root audit semantics (F15)", () => {
       expect.arrayContaining(["local-host"]),
     );
   });
+
+  it("rejects drive-letter paths with forward slashes but not URL schemes", async () => {
+    const { auditLibraryRoot } = await import("../../scripts/lib/library-ops.mjs");
+    const badRoot = await createLibraryRoot({ summary: "见 D:/Users/maintainer/notes.txt" });
+    const badReport = await auditLibraryRoot(badRoot, { mode: "working" });
+    expect(badReport.ok).toBe(false);
+    expect(badReport.findings.map((finding: { code: string }) => finding.code)).toEqual(
+      expect.arrayContaining(["absolute-windows-path"]),
+    );
+
+    const urlRoot = await createLibraryRoot({ externalUrl: "https://www.youtube.com/watch?v=abc" });
+    const urlReport = await auditLibraryRoot(urlRoot, { mode: "working" });
+    expect(urlReport.ok).toBe(true);
+    expect(urlReport.findings).toEqual([]);
+  });
+
+  it("flags stale internal state files left inside the library source", async () => {
+    const { auditLibraryRoot } = await import("../../scripts/lib/library-ops.mjs");
+    const root = await createLibraryRoot();
+    await writeFile(path.join(root, "content", "library", ".library-commit.json"), "{}", "utf8");
+    await writeFile(path.join(root, "content", "library", ".works.json.1.2.tmp"), "{}", "utf8");
+
+    const report = await auditLibraryRoot(root, { mode: "working" });
+
+    expect(report.ok).toBe(false);
+    expect(report.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "internal-state-file", path: "content/library/.library-commit.json" }),
+      ]),
+    );
+  });
+
+  it("keeps the data-core and CLI internal-state helpers in sync", async () => {
+    const { isLibraryInternalStateEntry: cliHelper } = await import("../../scripts/lib/library-ops.mjs");
+    const { isLibraryInternalStateEntry: coreHelper } = await import(
+      "../../packages/data-core/src/library-state-files.ts"
+    );
+    const samples = [
+      "content/library/.library-commit.json",
+      "content/library/.composers.json.1234.uuid.tmp",
+      "runtime/state/.library-commit.json",
+      "content/library/composers.json",
+      "assets/managed/cover.jpg",
+      "content/site/config.json",
+    ];
+    for (const sample of samples) {
+      expect(coreHelper(sample), sample).toBe(cliHelper(sample));
+    }
+    expect(coreHelper("content\\library\\.library-commit.json")).toBe(true);
+    expect(coreHelper("content/library/composers.json")).toBe(false);
+  });
 });

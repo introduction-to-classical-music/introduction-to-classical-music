@@ -753,7 +753,9 @@ async function main() {
   const siteConfig = await loadSiteConfig();
   siteConfig.lastImportedAt = new Date().toISOString();
   await saveSiteConfig(siteConfig);
-  await writeGeneratedArtifacts();
+  // Maintenance import: generated data feeds the local site/dev preview, so keep
+  // local resource links (public stripping only applies to exported sites).
+  await writeGeneratedArtifacts({ siteOutputMode: "local" });
   await fs.rm(tempDir, { recursive: true, force: true });
 
   process.stdout.write(

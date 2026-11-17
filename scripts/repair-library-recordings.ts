@@ -204,7 +204,8 @@ async function main() {
   library = stripUnusedPlaceholderPeople(library);
   if (!dryRun) {
     await saveLibraryToDisk(library);
-    await writeGeneratedArtifacts();
+    // Maintenance repair: local maintenance flow, keep local resource links.
+    await writeGeneratedArtifacts({ siteOutputMode: "local" });
   }
 
   const remainingUnknown = library.recordings.filter((recording) => compact(recording.workTypeHint) === "unknown").length;

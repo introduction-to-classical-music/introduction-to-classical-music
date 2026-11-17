@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -77,7 +78,7 @@ describe("library save transactions (F16)", () => {
     const { tempRoot, libraryRoot, saveLibraryToDisk, validate } = await prepareLibrary("composer-a", "Composer A");
 
     const marker = JSON.parse(
-      await readFile(path.join(libraryRoot, "content", "library", ".library-commit.json"), "utf8"),
+      await readFile(path.join(libraryRoot, "runtime", "state", ".library-commit.json"), "utf8"),
     );
     expect(marker.schemaVersion).toBe("library-commit-v1");
     expect(marker.files.map((file: { name: string }) => file.name).sort()).toEqual([
@@ -105,6 +106,12 @@ describe("library save transactions (F16)", () => {
       /Injected library save failure after writing 3 file/,
     );
 
+    // The marker must live outside the exported content tree (R1 rework).
+    await expect(
+      readFile(path.join(libraryRoot, "content", "library", ".library-commit.json"), "utf8"),
+    ).rejects.toThrow();
+    expect((await readdir(path.join(libraryRoot, "content", "library"))).sort()).not.toContain(".library-commit.json");
+
     // "Restart": loading must detect the mismatched commit marker and roll the
     // mixed half-save back to the previous snapshot.
     const { loadLibraryFromDisk, recoverLibraryFromInterruptedSave } = await import(
@@ -117,7 +124,7 @@ describe("library save transactions (F16)", () => {
     expect(await readComposerIds(libraryRoot)).toEqual(["composer-a"]);
 
     const marker = JSON.parse(
-      await readFile(path.join(libraryRoot, "content", "library", ".library-commit.json"), "utf8"),
+      await readFile(path.join(libraryRoot, "runtime", "state", ".library-commit.json"), "utf8"),
     );
     expect(marker.recoveredAt).toBeTruthy();
 
@@ -148,6 +155,21 @@ describe("library save transactions (F16)", () => {
     const transactions = await listTransactionDirectories(tempRoot);
     expect(transactions.length).toBeLessThanOrEqual(5);
     expect(await readComposerIds(libraryRoot)).toEqual(["composer-7"]);
+  });
+
+  it("migrates a pre-rework commit marker out of content/library on load", async () => {
+    const { libraryRoot } = await prepareLibrary("composer-a", "Composer A");
+    const commitPath = path.join(libraryRoot, "runtime", "state", ".library-commit.json");
+    const legacyContentMarker = path.join(libraryRoot, "content", "library", ".library-commit.json");
+    await writeFile(legacyContentMarker, await readFile(commitPath, "utf8"), "utf8");
+    await rm(commitPath);
+
+    const { loadLibraryFromDisk } = await import("../../packages/data-core/src/library-store.ts");
+    const library = await loadLibraryFromDisk();
+
+    expect(library.composers.map((composer) => composer.id)).toEqual(["composer-a"]);
+    expect(existsSync(legacyContentMarker)).toBe(false);
+    expect(existsSync(commitPath)).toBe(true);
   });
 
   it("reports no-commit-record for a legacy library that was never saved through the store", async () => {

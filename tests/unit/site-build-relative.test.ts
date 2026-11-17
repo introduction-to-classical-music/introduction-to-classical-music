@@ -41,6 +41,15 @@ describe("local site export", () => {
     // Desktop local site build keeps local links.
     expect(desktopMain).toContain('buildActiveLibrarySite({ siteOutputMode: "local", buildSource: "local" })');
 
+    // Dev/maintenance CLIs must not silently use the public default: their
+    // generated data feeds the local dev preview, so they opt in to local mode.
+    const buildIndexes = await fs.readFile(path.resolve("scripts/build-indexes.ts"), "utf8");
+    const importLegacy = await fs.readFile(path.resolve("scripts/import-legacy.ts"), "utf8");
+    const repairRecordings = await fs.readFile(path.resolve("scripts/repair-library-recordings.ts"), "utf8");
+    expect(buildIndexes).toContain('writeGeneratedArtifacts({ siteOutputMode: "local" })');
+    expect(importLegacy).toContain('writeGeneratedArtifacts({ siteOutputMode: "local" })');
+    expect(repairRecordings).toContain('writeGeneratedArtifacts({ siteOutputMode: "local" })');
+
     // F06: directory name emphasis escapes before inserting <strong>.
     expect(directoryBrowser).toContain("emphasizeHtml");
     expect(directoryBrowser).not.toContain("value.replace(highlight");

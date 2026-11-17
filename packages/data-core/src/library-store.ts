@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { writeFileAtomic, writeJsonFileAtomic } from "./atomic-file.js";
 import { validateArticles, type Article } from "./articles.js";
+import { LIBRARY_COMMIT_FILE_NAME } from "./library-state-files.js";
 import { buildIndexes, type PersonLinkConfig } from "./indexes.js";
 import { validateLibrary, type InfoPanel, type LibraryData, type ResourceLink } from "../../shared/src/schema.js";
 import { getRuntimePaths } from "./app-paths.js";
@@ -119,7 +120,6 @@ const LIBRARY_ENTITY_FILE_NAMES = [
   "works.json",
   "recordings.json",
 ] as const;
-const LIBRARY_COMMIT_FILE_NAME = ".library-commit.json";
 const LIBRARY_TRANSACTION_SCHEMA_VERSION = "library-transaction-v1";
 const LIBRARY_COMMIT_SCHEMA_VERSION = "library-commit-v1";
 const LIBRARY_TRANSACTION_RETENTION = 5;
@@ -166,7 +166,39 @@ export function getLibraryTransactionRootPath() {
 }
 
 function getLibraryCommitPath() {
+  const runtimePaths = getRuntimePaths();
+  if (runtimePaths.mode === "bundle") {
+    // Internal runtime state lives inside the bundle but outside `content/`, so
+    // source exports (manifest/content/assets) never copy it.
+    return path.join(runtimePaths.library.runtimeDir, "state", LIBRARY_COMMIT_FILE_NAME);
+  }
+  // Legacy/dev mode: keep bookkeeping out of the tracked repository tree.
+  return path.join(runtimePaths.library.rootDir, "output", "library-state", LIBRARY_COMMIT_FILE_NAME);
+}
+
+/** Pre-rework location (inside content/library); migrated and removed on load. */
+function getLegacyLibraryCommitPath() {
   return path.join(getRuntimePaths().library.contentLibraryDir, LIBRARY_COMMIT_FILE_NAME);
+}
+
+async function migrateLegacyLibraryCommitRecord() {
+  const legacyPath = getLegacyLibraryCommitPath();
+  let raw: string;
+  try {
+    raw = await fs.readFile(legacyPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  const currentPath = getLibraryCommitPath();
+  try {
+    await fs.access(currentPath);
+  } catch {
+    await writeFileAtomic(currentPath, raw);
+  }
+  await fs.rm(legacyPath, { force: true });
 }
 
 function getLibraryEntityFiles() {
@@ -350,6 +382,7 @@ async function restoreLibraryFromTransaction(directory: string, manifest: Librar
  */
 export async function recoverLibraryFromInterruptedSave(): Promise<LibraryRecoveryResult> {
   await ensureDirectories();
+  await migrateLegacyLibraryCommitRecord();
   const commit = await readLibraryCommitRecord();
   const digests = await computeLibraryEntityDigests();
   if (commit && isLibraryRecordConsistent(commit, digests)) {
@@ -388,6 +421,7 @@ export async function loadLibraryFromDisk(): Promise<LibraryData> {
 
 export async function saveLibraryToDisk(library: LibraryData) {
   await ensureDirectories();
+  await migrateLegacyLibraryCommitRecord();
   const fileMap = getFileMap();
   const projectedPersonIds = new Set((library.people || []).map((person) => person.id));
   const payloads = [
