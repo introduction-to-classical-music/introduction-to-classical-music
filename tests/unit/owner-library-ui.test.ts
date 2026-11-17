@@ -44,6 +44,12 @@ describe("owner library management ui wiring", () => {
     expect(ownerServer).toContain("未关联条目");
     expect(ownerApp).toContain('siteBase: "./"');
     expect(ownerApp).toContain("pickDirectory");
+    // F15: public export reports stripped local links, local build stays local.
+    expect(ownerServer).toContain("siteOutputMode: \"public\"");
+    expect(ownerServer).toContain("siteOutputMode: \"local\"");
+    expect(ownerServer).toContain("auditSiteOutputForLocalPaths");
+    expect(ownerServer).toContain("strippedLocalLinks");
+    expect(ownerApp).toContain("result.notice");
   });
 
   it("exposes local resource link fields and open-resource wiring", async () => {

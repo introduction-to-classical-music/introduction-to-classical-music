@@ -61,6 +61,7 @@ import {
 import { validateLibrary } from "../../../packages/shared/src/schema.js";
 import { getRuntimePaths } from "../../../packages/data-core/src/app-paths.js";
 import { buildLibrarySite } from "../../../packages/data-core/src/site-build-runner.js";
+import { auditSiteOutputForLocalPaths } from "../../../packages/data-core/src/site-output-audit.js";
 import {
   bootstrapActiveLibrary,
   exportActiveLibraryBundle,
@@ -101,6 +102,11 @@ const localSiteServer = createLocalSiteServer({
   preferredPort: Number(process.env.LIBRARY_SITE_PORT || 4331),
 });
 
+async function writeLocalGeneratedArtifacts() {
+  // Local owner flows keep local resource links (W5); public exports strip them.
+  return writeGeneratedArtifacts({ siteOutputMode: "local" });
+}
+
 async function ensureLibrarySiteReady(options = { buildIfMissing: false }) {
   const summary = await getActiveLibrarySummary();
   const indexPath = path.join(summary.buildSiteDir, "index.html");
@@ -110,7 +116,7 @@ async function ensureLibrarySiteReady(options = { buildIfMissing: false }) {
     if (!options.buildIfMissing) {
       throw new Error("Local site has not been built yet");
     }
-    await buildLibrarySite();
+    await buildLibrarySite({ siteOutputMode: "local", buildSource: "local" });
   }
   return localSiteServer.ensureStarted((await getActiveLibrarySummary()).buildSiteDir);
 }
@@ -445,7 +451,7 @@ async function previewOrSave(entityType, payload, shouldSave) {
 
   if (shouldSave) {
     await saveLibraryToDisk(validated);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
   }
 
   return {
@@ -690,7 +696,7 @@ function bucketForEntityType(entityType) {
 async function saveValidatedLibrary(library) {
   const validated = validateLibrary(normalizeOwnerManagedLibrary(library));
   await saveLibraryToDisk(validated);
-  await writeGeneratedArtifacts();
+  await writeLocalGeneratedArtifacts();
   return validated;
 }
 
@@ -961,7 +967,7 @@ app.post("/api/library/merge", async (request, response) => {
     await mkdir(path.dirname(backupRoot), { recursive: true });
     await cp(runtimePaths.library.rootDir, backupRoot, { recursive: true });
     await saveLibraryToDisk(result.library);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({ merged: true, backupRoot, report: result.report, libraryMeta: await getActiveLibrarySummary() });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
@@ -983,11 +989,13 @@ app.post("/api/library/open-site", async (_request, response) => {
 
 app.post("/api/library/build-site", async (_request, response) => {
   try {
-    const buildResult = await buildLibrarySite();
+    const buildResult = await buildLibrarySite({ siteOutputMode: "local", buildSource: "local" });
     const site = await ensureLibrarySiteReady({ buildIfMissing: false });
     response.json({
       built: true,
       outputDir: buildResult.outputDir,
+      siteOutputMode: buildResult.siteOutputMode,
+      strippedLocalLinks: buildResult.strippedLocalLinks,
       siteUrl: site.url,
       libraryMeta: await getActiveLibrarySummary(),
     });
@@ -1002,7 +1010,12 @@ app.post("/api/library/export-site", async (request, response) => {
     if (!destinationPath) return response.status(400).json({ error: "Missing site export destination path" });
     const stagingPath = path.join(runtimePaths.appData.cacheDir, `site-export-${Date.now()}`);
     await mkdir(path.dirname(stagingPath), { recursive: true });
-    const buildResult = await buildLibrarySite({ outputDir: stagingPath, siteBase: String(request.body?.siteBase || "/") });
+    const buildResult = await buildLibrarySite({
+      outputDir: stagingPath,
+      siteBase: String(request.body?.siteBase || "/"),
+      buildSource: "export",
+      siteOutputMode: "public",
+    });
     const resolvedTarget = path.resolve(destinationPath);
     const replacement = `${resolvedTarget}.staging-${Date.now()}`;
     await rm(replacement, { recursive: true, force: true });
@@ -1010,7 +1023,24 @@ app.post("/api/library/export-site", async (request, response) => {
     await rm(resolvedTarget, { recursive: true, force: true });
     await rename(replacement, resolvedTarget);
     await rm(stagingPath, { recursive: true, force: true });
-    response.json({ exported: true, outputDir: resolvedTarget });
+    const outputAudit = await auditSiteOutputForLocalPaths(resolvedTarget);
+    if (!outputAudit.ok) {
+      return response.status(400).json({
+        error: "Public site export still contains local paths; exported files were not published",
+        localResourceUrls: outputAudit.localResourceUrls.slice(0, 5),
+        absolutePathHits: outputAudit.absolutePathHits.slice(0, 5),
+      });
+    }
+    response.json({
+      exported: true,
+      outputDir: resolvedTarget,
+      siteOutputMode: buildResult.siteOutputMode,
+      strippedLocalLinks: buildResult.strippedLocalLinks,
+      notice:
+        buildResult.strippedLocalLinks > 0
+          ? `已剥离 ${buildResult.strippedLocalLinks} 条本地链接（public 导出不包含本地路径）`
+          : "",
+    });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -1075,7 +1105,7 @@ app.post("/api/site", async (request, response) => {
     const currentSite = await loadSiteConfig();
     const site = mergeSiteConfigPatch(currentSite, request.body ?? {});
     await saveSiteConfig(site);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({
       saved: true,
       site,
@@ -1088,12 +1118,14 @@ app.post("/api/site", async (request, response) => {
 
 app.post("/api/rebuild", async (_request, response) => {
   try {
-    const buildResult = await buildLibrarySite();
+    const buildResult = await buildLibrarySite({ siteOutputMode: "local", buildSource: "local" });
     const site = await ensureLibrarySiteReady({ buildIfMissing: false });
-    const { indexes } = await writeGeneratedArtifacts();
+    const { indexes } = await writeLocalGeneratedArtifacts();
     response.json({
       rebuilt: true,
       outputDir: buildResult.outputDir,
+      siteOutputMode: buildResult.siteOutputMode,
+      strippedLocalLinks: buildResult.strippedLocalLinks,
       siteUrl: site.url,
       stats: indexes.stats,
       libraryMeta: await getActiveLibrarySummary(),
@@ -1662,7 +1694,7 @@ app.post("/api/articles", async (request, response) => {
     const article = buildArticle(articles, request.body || {});
     const validated = validateArticles(upsertCollection(articles, article) && articles);
     await saveArticlesToDisk(validated);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({
       mode: "created",
       article,
@@ -1683,7 +1715,7 @@ app.put("/api/articles/:id", async (request, response) => {
     });
     const validated = validateArticles(upsertCollection(articles, article) && articles);
     await saveArticlesToDisk(validated);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({
       mode: "updated",
       article,
@@ -1700,7 +1732,7 @@ app.delete("/api/articles/:id", async (request, response) => {
     const articles = await loadArticlesFromDisk();
     const nextArticles = articles.filter((item) => item.id !== request.params.id);
     await saveArticlesToDisk(nextArticles);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({ deleted: request.params.id });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });

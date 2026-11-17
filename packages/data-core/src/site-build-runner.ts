@@ -7,7 +7,9 @@ import { getRuntimePaths } from "./app-paths.js";
 import { getAppVersion } from "./app-version.js";
 import { syncLibraryAssetsToBuildSite } from "./library-build.js";
 import { writeGeneratedArtifacts } from "./library-store.js";
+import { resolveSiteOutputMode, type SiteOutputMode } from "./resource-links.js";
 import { createSiteBuildEnvironment } from "./site-runtime.js";
+import { auditSiteOutputForLocalPaths, type SiteOutputAudit } from "./site-output-audit.js";
 
 function resolveRuntimeWorkingDirectory(repoRoot: string) {
   const normalized = path.resolve(repoRoot);
@@ -93,6 +95,8 @@ export type LibrarySiteBuildSource = "local" | "cli" | "export";
 export type BuildMetadataOptions = {
   buildSource?: LibrarySiteBuildSource;
   siteBase?: string;
+  siteOutputMode?: SiteOutputMode;
+  strippedLocalLinks?: number;
 };
 
 export async function writeBuildMetadata(
@@ -104,6 +108,8 @@ export async function writeBuildMetadata(
   const metadata: Record<string, unknown> = {
     appVersion: getAppVersion(),
     buildSource: options.buildSource || "local",
+    siteOutputMode: options.siteOutputMode || "public",
+    strippedLocalLinks: options.strippedLocalLinks ?? 0,
   };
   if (options.siteBase) {
     metadata.siteBase = options.siteBase;
@@ -155,16 +161,28 @@ export type LibrarySiteBuildOptions = {
   includeLocalOnlyLinks?: boolean;
   outputDir?: string;
   siteBase?: string;
+  /** `public` (default) strips local/local-only links; `local` keeps them. */
+  siteOutputMode?: SiteOutputMode;
 };
 
-export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}) {
+export type LibrarySiteBuildResult = {
+  outputDir: string;
+  siteOutputMode: SiteOutputMode;
+  strippedLocalLinks: number;
+  outputAudit?: SiteOutputAudit;
+};
+
+export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}): Promise<LibrarySiteBuildResult> {
   const runtimePaths = getRuntimePaths();
   const outputDir = path.resolve(options.outputDir || runtimePaths.library.buildSiteDir);
   const { buildSource, includeLocalOnlyLinks, siteBase } = options;
-  await writeBuildRuntimeLog(`buildLibrarySite: begin root=${runtimePaths.library.rootDir}`);
+  const siteOutputMode = resolveSiteOutputMode({ siteOutputMode: options.siteOutputMode, includeLocalOnlyLinks });
+  await writeBuildRuntimeLog(`buildLibrarySite: begin root=${runtimePaths.library.rootDir} mode=${siteOutputMode}`);
   await writeBuildRuntimeLog("buildLibrarySite: writeGeneratedArtifacts:start");
-  await writeGeneratedArtifacts({ includeLocalOnlyLinks });
-  await writeBuildRuntimeLog("buildLibrarySite: writeGeneratedArtifacts:done");
+  const generated = await writeGeneratedArtifacts({ siteOutputMode });
+  await writeBuildRuntimeLog(
+    `buildLibrarySite: writeGeneratedArtifacts:done strippedLocalLinks=${generated.strippedLocalLinks}`,
+  );
   await writeBuildRuntimeLog("buildLibrarySite: runAstroBuild:start");
   await runAstroBuild({ outputDir, siteBase });
   await writeBuildRuntimeLog("buildLibrarySite: runAstroBuild:done");
@@ -175,9 +193,38 @@ export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}) {
   });
   await rewriteRelativeSiteLinks(outputDir, siteBase);
   await writeBuildRuntimeLog("buildLibrarySite: syncLibraryAssets:done");
-  await writeBuildMetadata(outputDir, { buildSource, siteBase });
+
+  let outputAudit: SiteOutputAudit | undefined;
+  if (siteOutputMode === "public") {
+    outputAudit = await auditSiteOutputForLocalPaths(outputDir);
+    if (outputAudit.localResourceUrls.length > 0) {
+      const sample = outputAudit.localResourceUrls
+        .slice(0, 3)
+        .map((hit) => `${hit.path}:${hit.line}`)
+        .join(", ");
+      throw new Error(`Public site output still references /__local-resource (${sample}); local links were not stripped`);
+    }
+    if (outputAudit.absolutePathHits.length > 0) {
+      await writeBuildRuntimeLog(
+        `buildLibrarySite: public output contains ${outputAudit.absolutePathHits.length} absolute path hit(s); review before release`,
+      );
+    }
+    await writeBuildRuntimeLog(
+      `buildLibrarySite: public output audit ok files=${outputAudit.checkedFiles} strippedLocalLinks=${generated.strippedLocalLinks}`,
+    );
+  }
+
+  await writeBuildMetadata(outputDir, {
+    buildSource,
+    siteBase,
+    siteOutputMode,
+    strippedLocalLinks: generated.strippedLocalLinks,
+  });
   await writeBuildRuntimeLog("buildLibrarySite: writeBuildMetadata:done");
   return {
     outputDir,
+    siteOutputMode,
+    strippedLocalLinks: generated.strippedLocalLinks,
+    outputAudit,
   };
 }

@@ -6404,7 +6404,7 @@ librarySiteExportButton?.addEventListener("click", async () => {
     const destinationPath = await promptDestination("请选择静态网站导出目录。维护者可直接选择站点部署仓库的目标目录。", "directory");
     if (!destinationPath) return;
     const result = await fetchJson("/api/library/export-site", { method: "POST", body: JSON.stringify({ destinationPath, siteBase: "./" }) });
-    setResult(`静态网站已导出到：${result.outputDir}`);
+    setResult(`静态网站已导出到：${result.outputDir}${result.notice ? `（${result.notice}）` : ""}`);
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
   }

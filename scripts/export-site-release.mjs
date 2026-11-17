@@ -58,7 +58,24 @@ try {
   await rm(outputDir, { recursive: true, force: true });
   await mkdir(outputDir, { recursive: true });
   const { buildLibrarySite } = await import("../output/runtime/packages/data-core/src/site-build-runner.js");
-  await buildLibrarySite({ outputDir, siteBase, buildSource: "export" });
+  const { auditSiteOutputForLocalPaths } = await import("../output/runtime/packages/data-core/src/site-output-audit.js");
+  const buildResult = await buildLibrarySite({
+    outputDir,
+    siteBase,
+    buildSource: "export",
+    siteOutputMode: "public",
+  });
+  // W5/F15: verify the emitted files, not only the transformation. Public
+  // artifacts must not contain local-resource endpoints or absolute paths.
+  const outputAudit = await auditSiteOutputForLocalPaths(outputDir);
+  if (!outputAudit.ok) {
+    throw new Error(
+      `Public site output audit failed (${JSON.stringify({
+        localResourceUrls: outputAudit.localResourceUrls.slice(0, 5),
+        absolutePathHits: outputAudit.absolutePathHits.slice(0, 5),
+      })})`,
+    );
+  }
   await writeFile(path.join(outputDir, ".nojekyll"), "", "utf8");
 
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
@@ -69,11 +86,19 @@ try {
     appVersion: packageJson.version || "",
     builtAt: new Date().toISOString(),
     siteBase,
+    siteOutputMode: buildResult.siteOutputMode,
+    strippedLocalLinks: buildResult.strippedLocalLinks,
+    sourceLocalResourceLinks: sourceAudit.counts?.localResourceLinks ?? 0,
     sourceDigest: sourceAudit.sourceDigest,
     siteDigest: siteTree.digest,
   };
   await writeFile(path.join(outputDir, "site-release-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  process.stdout.write(`${JSON.stringify({ outputDir, manifest }, null, 2)}\n`);
+  if (buildResult.strippedLocalLinks > 0) {
+    process.stderr.write(`已剥离 ${buildResult.strippedLocalLinks} 条本地链接（public 模式不导出本地路径）。\n`);
+  }
+  process.stdout.write(
+    `${JSON.stringify({ outputDir, manifest, outputAudit: { checkedFiles: outputAudit.checkedFiles } }, null, 2)}\n`,
+  );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack || error.message : String(error)}\n`);
   process.exitCode = 1;

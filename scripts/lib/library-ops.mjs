@@ -113,17 +113,62 @@ function countValue(value) {
   return Array.isArray(value) ? value.length : null;
 }
 
-function inspectForbiddenText(relativePath, text, findings) {
-  const checks = [
-    ["test-link", /guide-test-3|testtesttest/i],
-    ["local-host", /localhost|127\.0\.0\.1/i],
-    ["absolute-windows-path", /[A-Z]:\\/],
-  ];
-  for (const [code, pattern] of checks) {
-    if (pattern.test(text)) {
+const FORBIDDEN_TEXT_CHECKS = [
+  ["test-link", /guide-test-3|testtesttest/i],
+  ["local-host", /localhost|127\.0\.0\.1/i],
+  // F15: absolute Windows paths are a leak in public output, but schema-valid
+  // local resource links (`localPath`) are a supported feature for personal
+  // libraries and are stripped by public exports instead of rejected here.
+  ["absolute-windows-path", /[A-Z]:\\/],
+];
+
+/** Keys whose string values are schema-valid local resource paths (allowed). */
+const LOCAL_RESOURCE_KEYS = new Set(["localPath", "path"]);
+
+function inspectStringValue(value, relativePath, findings) {
+  for (const [code, pattern] of FORBIDDEN_TEXT_CHECKS) {
+    if (pattern.test(value)) {
       findings.push({ code, path: relativePath });
     }
   }
+}
+
+function inspectJsonValue(value, location, findings, counters) {
+  if (typeof value === "string") {
+    inspectStringValue(value, location, findings);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => inspectJsonValue(item, `${location}[${index}]`, findings, counters));
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    const childLocation = `${location}.${key}`;
+    if (LOCAL_RESOURCE_KEYS.has(key)) {
+      if (typeof child === "string" && child.trim()) {
+        counters.localResourceLinks += 1;
+      }
+      // Allowed: public exports strip local links and assert the emitted files
+      // contain no local paths (see scripts/export-site-release.mjs).
+      continue;
+    }
+    inspectJsonValue(child, childLocation, findings, counters);
+  }
+}
+
+function inspectForbiddenText(relativePath, text, findings, counters) {
+  if (relativePath.toLowerCase().endsWith(".json")) {
+    try {
+      inspectJsonValue(JSON.parse(text), relativePath, findings, counters);
+      return;
+    } catch {
+      // Invalid JSON is already reported by readJson(); fall back to raw checks.
+    }
+  }
+  inspectStringValue(text, relativePath, findings);
 }
 
 export async function auditLibraryRoot(rootDir, options = {}) {
@@ -133,6 +178,7 @@ export async function auditLibraryRoot(rootDir, options = {}) {
   const warnings = [];
   const findings = [];
   const counts = {};
+  const counters = { localResourceLinks: 0 };
 
   if (!(await exists(resolvedRoot))) {
     errors.push({ code: "root-missing", path: resolvedRoot });
@@ -143,7 +189,10 @@ export async function auditLibraryRoot(rootDir, options = {}) {
       errors,
       warnings,
       findings,
-      counts,
+      counts: {
+        ...counts,
+        localResourceLinks: counters.localResourceLinks,
+      },
       sourceDigest: "",
       sourceFiles: [],
     };
@@ -208,7 +257,7 @@ export async function auditLibraryRoot(rootDir, options = {}) {
     }
     try {
       const text = await readFile(path.join(resolvedRoot, entry.path), "utf8");
-      inspectForbiddenText(entry.path, text, findings);
+      inspectForbiddenText(entry.path, text, findings, counters);
     } catch (error) {
       errors.push({ code: "source-read-failed", path: entry.path, message: error instanceof Error ? error.message : String(error) });
     }
@@ -226,7 +275,10 @@ export async function auditLibraryRoot(rootDir, options = {}) {
     rootDir: resolvedRoot,
     mode,
     manifest,
-    counts,
+    counts: {
+      ...counts,
+      localResourceLinks: counters.localResourceLinks,
+    },
     errors,
     warnings,
     findings,

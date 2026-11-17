@@ -168,7 +168,13 @@ async function loadSiteBuildModule() {
   return siteBuildModulePromise;
 }
 
-async function buildActiveLibrarySite(options: { includeLocalOnlyLinks?: boolean } = {}) {
+async function buildActiveLibrarySite(
+  options: {
+    buildSource?: "local" | "cli" | "export";
+    includeLocalOnlyLinks?: boolean;
+    siteOutputMode?: "local" | "public";
+  } = {},
+) {
   const siteBuildModule = await loadSiteBuildModule();
   return siteBuildModule.buildLibrarySite(options);
 }
@@ -462,7 +468,7 @@ async function openLocalLibrarySite() {
   let summary = await getActiveLibraryBundleSummary();
   if (await shouldRebuildLibrarySite(summary)) {
     writeDesktopLog("openLocalLibrarySite: build missing or stale, triggering Astro build");
-    await buildActiveLibrarySite();
+    await buildActiveLibrarySite({ siteOutputMode: "local", buildSource: "local" });
     summary = await getActiveLibraryBundleSummary();
   }
   const localSiteServer = await getLocalSiteServerInstance();

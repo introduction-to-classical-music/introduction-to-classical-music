@@ -5,7 +5,13 @@ import { validateArticles, type Article } from "./articles.js";
 import { buildIndexes, type PersonLinkConfig } from "./indexes.js";
 import { validateLibrary, type InfoPanel, type LibraryData, type ResourceLink } from "../../shared/src/schema.js";
 import { getRuntimePaths } from "./app-paths.js";
-import { sanitizeResourceLinksForSiteOutput } from "./resource-links.js";
+import {
+  countLocalOnlyResourceLinks,
+  resolveIncludeLocalOnlyLinks,
+  resolveSiteOutputMode,
+  sanitizeResourceLinksForSiteOutput,
+  type SiteOutputMode,
+} from "./resource-links.js";
 
 const siteConfigDefaults: {
   title: string;
@@ -180,9 +186,23 @@ export async function saveSiteConfig(siteConfig: SiteConfig) {
   await writeJsonFile(fileMap.site, siteConfig);
 }
 
-function prepareLibraryForSiteOutput(library: LibraryData, options: { includeLocalOnlyLinks?: boolean } = {}) {
-  const sanitizeLinks = (links: ResourceLink[] = []) =>
-    sanitizeResourceLinksForSiteOutput(links, { includeLocalOnly: options.includeLocalOnlyLinks });
+export type SiteOutputOptions = {
+  /** `public` (default) strips local/local-only links; `local` keeps them. */
+  siteOutputMode?: SiteOutputMode;
+  /** Legacy explicit override; `true` means local mode. */
+  includeLocalOnlyLinks?: boolean;
+};
+
+function prepareLibraryForSiteOutput(library: LibraryData, options: SiteOutputOptions = {}) {
+  const siteOutputMode = resolveSiteOutputMode(options);
+  const includeLocalOnly = resolveIncludeLocalOnlyLinks({ siteOutputMode, includeLocalOnly: options.includeLocalOnlyLinks });
+  let strippedLocalLinks = 0;
+  const sanitizeLinks = (links: ResourceLink[] = []) => {
+    if (!includeLocalOnly) {
+      strippedLocalLinks += countLocalOnlyResourceLinks(links);
+    }
+    return sanitizeResourceLinksForSiteOutput(links, { includeLocalOnly });
+  };
   const sanitizeInfoPanel = (infoPanel: InfoPanel | undefined) =>
     infoPanel
       ? {
@@ -191,7 +211,7 @@ function prepareLibraryForSiteOutput(library: LibraryData, options: { includeLoc
         }
       : infoPanel;
 
-  return validateLibrary({
+  const renderableLibrary = validateLibrary({
     composers: library.composers.map((composer) => ({
       ...composer,
       infoPanel: sanitizeInfoPanel(composer.infoPanel),
@@ -211,16 +231,23 @@ function prepareLibraryForSiteOutput(library: LibraryData, options: { includeLoc
       infoPanel: sanitizeInfoPanel(recording.infoPanel),
     })),
   });
+
+  return {
+    siteOutputMode,
+    strippedLocalLinks,
+    library: renderableLibrary,
+  };
 }
 
-export async function writeGeneratedArtifacts(options: { includeLocalOnlyLinks?: boolean } = {}) {
+export async function writeGeneratedArtifacts(options: SiteOutputOptions = {}) {
   const [library, site, personLinks, articles] = await Promise.all([
     loadLibraryFromDisk(),
     loadSiteConfig(),
     loadPersonLinks(),
     loadArticlesFromDisk(),
   ]);
-  const renderableLibrary = prepareLibraryForSiteOutput(library, options);
+  const prepared = prepareLibraryForSiteOutput(library, options);
+  const renderableLibrary = prepared.library;
   const indexes = buildIndexes(renderableLibrary, personLinks, articles);
   const fileMap = getFileMap();
 
@@ -235,6 +262,8 @@ export async function writeGeneratedArtifacts(options: { includeLocalOnlyLinks?:
     site,
     indexes,
     articles,
+    siteOutputMode: prepared.siteOutputMode,
+    strippedLocalLinks: prepared.strippedLocalLinks,
   };
 }
 

@@ -27,14 +27,17 @@ async function main() {
   // (`127.0.0.1:4331/`), never from the GitHub Pages sub-path. The Pages base
   // stays in `apps/site/astro.config.mjs` and is used by the public export
   // (`scripts/export-site-release.mjs`), which passes its own `siteBase`.
-  const result = await buildLibrarySite({ siteBase: "/", buildSource: "cli" });
+  // The seed site is a public artifact (no maintainer-local links).
+  const result = await buildLibrarySite({ siteBase: "/", buildSource: "cli", siteOutputMode: "public" });
 
   await rm(outputSiteDir, { recursive: true, force: true });
   await mkdir(path.dirname(outputSiteDir), { recursive: true });
   await cp(result.outputDir, outputSiteDir, { recursive: true, force: true });
   await writeFile(path.join(outputSiteDir, ".nojekyll"), "", "utf8");
 
-  process.stdout.write(`Built site into ${outputSiteDir}\n`);
+  process.stdout.write(
+    `Built site into ${outputSiteDir} (siteOutputMode=${result.siteOutputMode}, strippedLocalLinks=${result.strippedLocalLinks})\n`,
+  );
 }
 
 main().catch((error) => {
