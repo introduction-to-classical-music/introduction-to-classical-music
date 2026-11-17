@@ -177,9 +177,12 @@ export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}): P
   const outputDir = path.resolve(options.outputDir || runtimePaths.library.buildSiteDir);
   const { buildSource, includeLocalOnlyLinks, siteBase } = options;
   const siteOutputMode = resolveSiteOutputMode({ siteOutputMode: options.siteOutputMode, includeLocalOnlyLinks });
+  // W10b: generated indexes/search entries need the same base Astro builds with.
+  // Explicit option > inherited env (desktop sets "/") > astro.config default.
+  const generatedBasePath = String(options.siteBase ?? process.env.ICM_SITE_BASE ?? "/introduction-to-classical-music-sites/");
   await writeBuildRuntimeLog(`buildLibrarySite: begin root=${runtimePaths.library.rootDir} mode=${siteOutputMode}`);
   await writeBuildRuntimeLog("buildLibrarySite: writeGeneratedArtifacts:start");
-  const generated = await writeGeneratedArtifacts({ siteOutputMode });
+  const generated = await writeGeneratedArtifacts({ siteOutputMode, basePath: generatedBasePath });
   await writeBuildRuntimeLog(
     `buildLibrarySite: writeGeneratedArtifacts:done strippedLocalLinks=${generated.strippedLocalLinks}`,
   );

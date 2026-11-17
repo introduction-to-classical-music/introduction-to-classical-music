@@ -523,6 +523,8 @@ export type SiteOutputOptions = {
   siteOutputMode?: SiteOutputMode;
   /** Legacy explicit override; `true` means local mode. */
   includeLocalOnlyLinks?: boolean;
+  /** Deployment base path used for generated internal hrefs (W10b). */
+  basePath?: string;
 };
 
 function prepareLibraryForSiteOutput(library: LibraryData, options: SiteOutputOptions = {}) {
@@ -580,7 +582,7 @@ export async function writeGeneratedArtifacts(options: SiteOutputOptions = {}) {
   ]);
   const prepared = prepareLibraryForSiteOutput(library, options);
   const renderableLibrary = prepared.library;
-  const indexes = buildIndexes(renderableLibrary, personLinks, articles);
+  const indexes = buildIndexes(renderableLibrary, personLinks, articles, { basePath: options.basePath });
   const fileMap = getFileMap();
 
   await ensureDirectories();

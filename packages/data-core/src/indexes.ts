@@ -1,5 +1,6 @@
 import { buildRecordingDisplayTitle, getEntitySearchTexts, getWebsiteDisplay } from "../../shared/src/display.js";
 import type { Composer, LibraryData, Person, Recording, Work } from "../../shared/src/schema.js";
+import { withBasePath } from "../../shared/src/site-base.js";
 import type { Article } from "./articles.js";
 
 export type PersonLinkConfig = {
@@ -287,10 +288,35 @@ function createSearchEntry(input: Omit<SearchEntry, "matchTokens" | "aliasTokens
   };
 }
 
+export type LibraryIndexBuildOptions = {
+  /**
+   * Deployment base path used to prefix every internal `href` (W10b). Defaults
+   * to "/" (root builds); the Pages export passes
+   * "/introduction-to-classical-music-sites/".
+   */
+  basePath?: string;
+};
+
+function applyBasePathToIndexHrefs<T>(value: T, basePath: string): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => applyBasePathToIndexHrefs(item, basePath)) as T;
+  }
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      result[key] =
+        key === "href" && typeof child === "string" ? withBasePath(child, basePath) : applyBasePathToIndexHrefs(child, basePath);
+    }
+    return result as T;
+  }
+  return value;
+}
+
 export function buildIndexes(
   library: LibraryData,
   personLinks: PersonLinkConfig = { canonicalPersonLinks: {} },
   articles: Article[] = [],
+  options: LibraryIndexBuildOptions = {},
 ): LibraryIndexes {
   const composerMap = new Map(library.composers.map((composer) => [composer.id, composer]));
   const groupMap = new Map(library.workGroups.map((group) => [group.id, group]));
@@ -533,7 +559,7 @@ export function buildIndexes(
   const orchestraCount = library.people.filter((person) => person.roles.includes("orchestra")).length;
   const lastUpdatedAt = sortByKey(library.works).at(-1)?.updatedAt ?? "";
 
-  return {
+  const indexes: LibraryIndexes = {
     stats: {
       composerCount: library.composers.length,
       workCount: library.works.length,
@@ -549,5 +575,9 @@ export function buildIndexes(
     personIndex,
     searchIndex,
   };
+  // W10b: every internal href (including client-side search entries) gets the
+  // deployment base exactly once, so Pages exports never emit root-absolute
+  // links that skip `/introduction-to-classical-music-sites/`.
+  return applyBasePathToIndexHrefs(indexes, options.basePath ?? "/");
 }
 
