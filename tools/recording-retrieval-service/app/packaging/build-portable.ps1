@@ -61,10 +61,33 @@ foreach ($bundleRoot in @($bundle, $latestBundle)) {
   }
 }
 
+# Build provenance (W7b): record app/git/python/PyInstaller versions, material
+# allow-list and requirements-lock hashes, and a digest of the emitted bundle.
+$pyinstallerVersion = ""
+try {
+  $pyinstallerVersion = (& $python -m PyInstaller --version 2>$null | Select-Object -First 1)
+} catch {
+  $pyinstallerVersion = "unknown"
+}
+$buildInfoPath = Join-Path $bundle "build-info.json"
+& $python (Join-Path $root "app\build_info.py") --app-root $root --bundle-dir $bundle --output $buildInfoPath --pyinstaller-version "$pyinstallerVersion"
+if ($LASTEXITCODE -ne 0) {
+  throw "build-info.json generation failed"
+}
+Copy-Item -Force $buildInfoPath (Join-Path $latestBundle "build-info.json")
+
 if (Test-Path $zipPath) {
   Remove-Item -Force $zipPath
 }
 Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zipPath
+$zipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$zipBuildInfoPath = "$zipPath.build-info.json"
+& $python (Join-Path $root "app\build_info.py") --app-root $root --bundle-dir $bundle --output $zipBuildInfoPath --pyinstaller-version "$pyinstallerVersion" --portable-zip-sha256 $zipSha256
+if ($LASTEXITCODE -ne 0) {
+  throw "portable zip build-info.json generation failed"
+}
+Write-Host "Build info: $buildInfoPath"
+Write-Host "Zip build info: $zipBuildInfoPath"
 Write-Host "Portable directory: $bundle"
 Write-Host "Latest portable directory: $latestBundle"
 Write-Host "Portable zip: $zipPath"

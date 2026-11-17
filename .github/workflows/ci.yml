@@ -26,6 +26,24 @@ jobs:
       - run: npm run audit:gate-self-test
       - run: npm run build
 
+  rrs-offline-pytest:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Recording Retrieval Service test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "./tools/recording-retrieval-service/app[dev]"
+      - name: Compile check (RRS)
+        run: python -m compileall -q tools/recording-retrieval-service/app/app
+      - name: Offline pytest (RRS, network tests excluded)
+        working-directory: tools/recording-retrieval-service/app
+        run: python -m pytest -m "not network" -q
+
   windows-package:
     if: github.ref_type != 'tag'
     runs-on: windows-latest

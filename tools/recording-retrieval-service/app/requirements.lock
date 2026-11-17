@@ -1,0 +1,21 @@
+# DRAFT dependency pins for the Recording Retrieval Service.
+#
+# STATUS: BLOCKED / UNVERIFIED.
+# This file was written without network access or a local .venv, so it could not
+# be produced by `pip freeze`/`pip-compile` and is NOT a verified lock file.
+# It pins only the direct dependencies to the lower bounds declared in
+# pyproject.toml; transitive dependencies and hashes are intentionally absent.
+#
+# Regenerate (needs network + Windows Python 3.13) before claiming reproducible
+# builds:
+#   python -m venv .venv
+#   .venv\Scripts\python -m pip install -U pip pip-tools
+#   .venv\Scripts\pip-compile --generate-hashes -o requirements.lock requirements.in
+#
+# Keep requirements.in and pyproject.toml in sync; build-portable.ps1 records the
+# lock file hash in build-info.json so drift is visible.
+fastapi==0.115.0
+httpx==0.28.0
+playwright==1.58.0
+pydantic==2.10.0
+uvicorn==0.34.0

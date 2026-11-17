@@ -32,8 +32,8 @@ from app.services.llm_client import (
 from app.services.orchestrator import JobOrchestrator, TERMINAL_JOB_STATUSES
 from app.services.retrieval import StubRetriever
 from app.services.source_profiles import PersonAliasLoader, ensure_orchestra_alias_file, ensure_person_alias_file
+from app.version import APP_VERSION
 
-APP_VERSION = "0.1.0"
 SERVICE_NAME = "recording-retrieval-service"
 
 

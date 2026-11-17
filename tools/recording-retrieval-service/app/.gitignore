@@ -18,3 +18,8 @@ config/bilibili-storage-state.json
 !downloads/.gitkeep
 !logs/.gitkeep
 !config/.gitkeep
+
+# Local-only LLM credentials: never commit the legacy config path or local overlays.
+materials/source-profiles/LLM config.txt
+config/*.local.json
+config/*.local.*

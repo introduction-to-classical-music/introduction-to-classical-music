@@ -1,0 +1,7 @@
+# Direct runtime dependencies (ranges mirror pyproject.toml). The generated lock
+# file is requirements.lock; see the BLOCKED note there before relying on it.
+fastapi>=0.115,<1.0
+httpx>=0.28,<1.0
+playwright>=1.58,<2.0
+pydantic>=2.10,<3.0
+uvicorn>=0.34,<1.0
