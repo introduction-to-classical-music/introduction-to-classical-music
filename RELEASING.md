@@ -13,7 +13,7 @@
 
 1. 运行 `npm run bootstrap:windows`
 2. 运行 `npm run doctor:windows`
-3. 运行 `npm run check`
+3. 运行 `npm run check`（其中包含实体生命体征审计、参考库审计与审计门禁自测；任一审计 issue 会以非零退出码失败）
 4. 运行 `npm run build`
 5. 运行 `npm run package:windows`（仅本地打包校验，不会发布到 GitHub Release）
 6. 检查安装、启动、覆盖升级、卸载和用户数据保留

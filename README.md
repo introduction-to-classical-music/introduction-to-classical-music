@@ -89,6 +89,8 @@ npm run package:windows
 
 说明：
 
+- `npm run check` 会依次执行文本编码审计、密钥扫描、实体生命体征审计、参考库审计、审计门禁自测、Astro 类型检查与单元测试；任一审计发现问题即以非零退出码失败
+- `npm run build` 生成默认库种子站点（public 模式，不包含本地文件链接）
 - 该命令只做本地打包校验，不会自动发布 GitHub Release
 - 公共 Release 由 GitHub Actions 在推送 `v*` Tag（如 `v0.1.1`）时自动发布
 

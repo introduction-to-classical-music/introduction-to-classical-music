@@ -1,3 +1,8 @@
+// Manual, LLM/network dependent audit for the non-recording auto-check job.
+// This is NOT a CI gate and intentionally has no pass/fail exit code: it needs a
+// configured LLM endpoint and produces human-reviewed reports under output/audits.
+// The blocking gates are `npm run entity-vitals:audit` and `npm run reference:audit`
+// (both fail non-zero on issues), plus `npm run audit:gate-self-test`.
 import { promises as fs } from "node:fs";
 import path from "node:path";
 

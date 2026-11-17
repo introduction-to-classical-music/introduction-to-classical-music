@@ -6,6 +6,7 @@ import { normalizeAutomationRun, type AutomationRun, type AutomationSnapshot } f
 import { defaultLlmConfig, mergeLlmConfigPatch, type LlmConfig } from "./llm.js";
 import type { RecordingRetrievalProviderStatus } from "./recording-retrieval.js";
 import { getRuntimePaths } from "../../data-core/src/app-paths.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "../../data-core/src/atomic-file.js";
 
 function stripUtf8Bom(value: string) {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
@@ -68,7 +69,7 @@ function runPath(runId: string) {
 export async function saveAutomationRun(run: AutomationRun) {
   await ensureAutomationDirs();
   const normalizedRun = normalizeAutomationRun(run);
-  await fs.writeFile(runPath(normalizedRun.id), `${JSON.stringify(normalizedRun, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(runPath(normalizedRun.id), normalizedRun);
   return normalizedRun;
 }
 
@@ -119,7 +120,7 @@ export async function persistRemoteImageAsset(options: {
   const outputDir = path.join(assetsDir, relativeDir);
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, fileName);
-  await fs.writeFile(outputPath, bytes);
+  await writeFileAtomic(outputPath, bytes);
 
   return `/${path.posix.join("library-assets", "managed", ...relativeDir.split(path.sep), fileName)}`;
 }
@@ -139,7 +140,7 @@ export async function persistUploadedImageAsset(options: {
   const outputDir = path.join(assetsDir, relativeDir);
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, fileName);
-  await fs.writeFile(outputPath, Buffer.from(options.bytes));
+  await writeFileAtomic(outputPath, Buffer.from(options.bytes));
 
   return `/${path.posix.join("library-assets", "managed", ...relativeDir.split(path.sep), fileName)}`;
 }
@@ -173,7 +174,7 @@ export async function loadLlmConfig() {
 export async function saveLlmConfig(config: LlmConfig) {
   await ensureAutomationDirs();
   const settingsPath = getRuntimePaths().appData.secretsPath;
-  await fs.writeFile(settingsPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(settingsPath, config);
   return config;
 }
 
@@ -201,6 +202,6 @@ export async function saveRecordingRetrievalConfig(config: RecordingRetrievalCon
     ...config,
     expectedProtocolVersion: "v1",
   } satisfies RecordingRetrievalConfig;
-  await fs.writeFile(recordingRetrievalSettingsPath, `${JSON.stringify(nextConfig, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(recordingRetrievalSettingsPath, nextConfig);
   return nextConfig;
 }

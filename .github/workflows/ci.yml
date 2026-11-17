@@ -22,6 +22,8 @@ jobs:
       - run: npm run public:audit
       - run: npm run runtime:build
       - run: npm run check
+      - run: npm run reference:audit
+      - run: npm run audit:gate-self-test
       - run: npm run build
 
   windows-package:
