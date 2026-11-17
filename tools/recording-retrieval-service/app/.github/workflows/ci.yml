@@ -10,6 +10,7 @@ jobs:
     runs-on: windows-latest
     env:
       RRS_WORKSPACE_ROOT: ${{ github.workspace }}/parent
+      RRS_PROTOCOL_PATH: ${{ github.workspace }}/parent/tools/recording-retrieval-service/PROTOCOL.md
     steps:
       - uses: actions/checkout@v4
       - name: Checkout parent project (public data/library for eval tests)
@@ -28,6 +29,8 @@ jobs:
       - name: Compile check
         run: python -m compileall -q app
       - name: Verify parent workspace fixture is available
-        run: python -c "import os, pathlib; root = pathlib.Path(os.environ['RRS_WORKSPACE_ROOT']); assert (root / 'data' / 'library' / 'works.json').exists(), root"
+        run: |
+          python -c "import os, pathlib; root = pathlib.Path(os.environ['RRS_WORKSPACE_ROOT']); assert (root / 'data' / 'library' / 'works.json').exists(), root"
+          python -c "import os, pathlib; protocol = pathlib.Path(os.environ['RRS_PROTOCOL_PATH']); assert protocol.is_file(), protocol"
       - name: Offline pytest (network tests excluded)
         run: python -m pytest -m "not network" -q

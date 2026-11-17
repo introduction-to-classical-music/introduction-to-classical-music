@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tomllib
 from pathlib import Path
 
@@ -10,6 +11,27 @@ from app.build_info import BUILD_INFO_SCHEMA_VERSION, build_build_info, hash_dir
 from app.version import APP_VERSION
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+PROTOCOL_PATH_ENV = "RRS_PROTOCOL_PATH"
+
+
+def _resolve_protocol_path(app_root: Path | None = None) -> Path | None:
+    """Locate PROTOCOL.md for both the parent-repo layout and standalone RRS.
+
+    Preference order: `RRS_PROTOCOL_PATH` (when it points at a readable file),
+    then `<app-root>/PROTOCOL.md`, then `<app-root>/../PROTOCOL.md`. The
+    standalone RRS repository does not contain PROTOCOL.md; its CI sets the env
+    var from the checked-out parent workspace.
+    """
+    root = app_root or APP_ROOT
+    override = os.environ.get(PROTOCOL_PATH_ENV, "").strip()
+    if override:
+        override_path = Path(override).expanduser()
+        if override_path.is_file():
+            return override_path
+    for candidate in (root / "PROTOCOL.md", root.parent / "PROTOCOL.md"):
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def test_app_version_is_the_single_source_of_truth():
@@ -25,10 +47,35 @@ def test_app_version_is_the_single_source_of_truth():
 
 
 def test_protocol_health_example_matches_implementation():
-    protocol = (APP_ROOT.parent / "PROTOCOL.md").read_text(encoding="utf-8")
+    protocol_path = _resolve_protocol_path()
+    if protocol_path is None:
+        pytest.skip("PROTOCOL.md not available in this checkout (set RRS_PROTOCOL_PATH or run from the parent repository)")
+    protocol = protocol_path.read_text(encoding="utf-8")
     health_start = protocol.index("### 4.1 Health")
     health_section = protocol[health_start : health_start + 500]
     assert f'"version": "{APP_VERSION}"' in health_section
+
+
+def test_protocol_path_resolution_env_and_fallbacks(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv(PROTOCOL_PATH_ENV, raising=False)
+    assert _resolve_protocol_path(tmp_path) is None
+
+    parent = tmp_path / "workspace"
+    app_root = parent / "app"
+    app_root.mkdir(parents=True)
+    (parent / "PROTOCOL.md").write_text("parent protocol", encoding="utf-8")
+    assert _resolve_protocol_path(app_root) == parent / "PROTOCOL.md"
+
+    (app_root / "PROTOCOL.md").write_text("app protocol", encoding="utf-8")
+    assert _resolve_protocol_path(app_root) == app_root / "PROTOCOL.md"
+
+    env_file = tmp_path / "env-PROTOCOL.md"
+    env_file.write_text("env protocol", encoding="utf-8")
+    monkeypatch.setenv(PROTOCOL_PATH_ENV, str(env_file))
+    assert _resolve_protocol_path(app_root) == env_file
+
+    monkeypatch.setenv(PROTOCOL_PATH_ENV, str(tmp_path / "missing-PROTOCOL.md"))
+    assert _resolve_protocol_path(app_root) == app_root / "PROTOCOL.md"
 
 
 def test_requirements_lock_present_and_marked_as_draft():
