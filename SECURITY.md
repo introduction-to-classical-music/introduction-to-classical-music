@@ -49,6 +49,15 @@
 - 本机测试/演示使用的密钥不得写入任何仓库文件、测试夹具或导出物；示例配置只使用占位符（如 `YOUR_...`）。
 - 双防线：打包输入以 `packaging/materials-whitelist.json` 为唯一允许清单；仓库内容由 `scripts/audit-secrets.mjs` 扫描。两者都不以“构建后删除”作为唯一保护。
 
+## 本地服务面与 Electron 残余风险（W3，2026-11-17）
+
+- owner（`127.0.0.1:4322`）与本地站点（`127.0.0.1:4331`）仅回环监听。owner 使用 **per-session token**：`GET /?bootstrap=<token>` 换取 `HttpOnly; SameSite=Strict` 会话 cookie 并 302 回首页；所有 `/api/*` 请求必须携带该 cookie；`Host` 必须为 `127.0.0.1:<端口>`，存在 `Origin` 时必须同源（CSRF/DNS-rebinding 防护）。
+- 桌面主进程每次启动 owner 服务时生成 32 字节随机 token 并经 spawn env 注入；独立开发模式（`npm run owner`）会打印一次性的 bootstrap URL，**不会静默放行**。
+- 本地文件链接改由 Electron IPC（`desktop:open-local-resource`）打开：主进程只允许当前活动库已登记的 `localPath` 或库内资产，其他路径（含空路径）一律拒绝；旧的同源 `/__local-resource` HTTP 端点已删除，非 Electron 浏览器点击本地链接只显示提示。
+- `/api/remote-image` 在请求前解析域名并阻断 loopback/私网/链路本地/多播地址（IPv4、IPv6、IPv4-mapped），限制响应 10MB、图片 content-type 白名单与独立超时，并对重定向后的最终地址再次校验。
+- `/api/assets/upload` 使用 bucket 白名单、安全 slug、图片扩展名白名单，并解析路径做前缀包含校验；`/api/open-resource` 本地路径走上述白名单。站点导出目标拒绝盘符根/共享根、系统目录、用户主目录与活动库内部路径；已存在且非空的目录必须显式确认覆盖。`desktop:open-external` 仅允许 `http/https/mailto`。
+- **残余风险**：桌面渲染窗口仍为 `sandbox:false`（为兼容当前 preload/asar 加载方式，本轮未启用 Chromium sandbox），依靠 `contextIsolation:true`、`nodeIntegration:false`、同源限制与 IPC 白名单降低风险；启用 sandbox 需改为 CJS preload 并回归全部窗口功能，列入后续工作。owner 会话为单进程共享 token（不区分标签页），同机进程若已获得 token 仍可调用；token 仅存在于进程内存/启动 URL 中，不写入日志或仓库。
+
 ## 提交与发布前检查
 
 - 提交前运行 `npm run audit:secrets`；`npm run check` 与 CI `verify` job 会执行同一检查，命中即失败。

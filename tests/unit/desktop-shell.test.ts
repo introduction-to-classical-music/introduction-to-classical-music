@@ -84,6 +84,11 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain("ICM_OWNER_BOOTSTRAP_TOKEN");
     expect(mainProcess).toContain("createOwnerBootstrapToken");
     expect(mainProcess).toContain("ownerBootstrapUrl");
+    // W3: external links are protocol-restricted; local resource opening is IPC.
+    expect(mainProcess).toContain("isAllowedExternalTarget");
+    expect(mainProcess).toContain("Unsupported external link protocol");
+    expect(mainProcess).toContain("desktop:open-local-resource");
+    expect(mainProcess).toContain("recentlyPickedLocalResourcePaths");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');
     expect(mainProcess).toContain('ipcMain.handle("desktop:pick-library-folder"');

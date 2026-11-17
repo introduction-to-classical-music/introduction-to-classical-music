@@ -7,6 +7,7 @@ import { defaultLlmConfig, mergeLlmConfigPatch, type LlmConfig } from "./llm.js"
 import type { RecordingRetrievalProviderStatus } from "./recording-retrieval.js";
 import { getRuntimePaths } from "../../data-core/src/app-paths.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "../../data-core/src/atomic-file.js";
+import { resolveAssetUploadDirectory, sanitizeAssetBucket, sanitizeAssetSlug } from "../../data-core/src/asset-upload-policy.js";
 
 function stripUtf8Bom(value: string) {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
@@ -114,10 +115,13 @@ export async function persistRemoteImageAsset(options: {
 
   const bytes = Buffer.from(await response.arrayBuffer());
   const extension = extensionFromUrl(options.sourceUrl);
-  const relativeDir = path.join(options.bucket, sanitizeSegment(options.slug));
-  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(options.sourceUrl)}${extension}`;
+  // W3: allow-listed bucket + resolved containment (defense in depth).
+  const bucket = sanitizeAssetBucket(options.bucket);
+  const slug = sanitizeAssetSlug(options.slug);
   const assetsDir = getRuntimePaths().library.assetsManagedDir;
-  const outputDir = path.join(assetsDir, relativeDir);
+  const outputDir = resolveAssetUploadDirectory(assetsDir, { bucket, slug });
+  const relativeDir = path.relative(assetsDir, outputDir);
+  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(options.sourceUrl)}${extension}`;
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, fileName);
   await writeFileAtomic(outputPath, bytes);
@@ -134,10 +138,13 @@ export async function persistUploadedImageAsset(options: {
   await ensureAutomationDirs();
   const sourceName = options.fileName || `${options.slug}.jpg`;
   const extension = path.extname(sourceName).toLowerCase() || ".jpg";
-  const relativeDir = path.join(options.bucket, sanitizeSegment(options.slug));
-  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(`${sourceName}-${Date.now()}`)}${extension}`;
+  // W3: allow-listed bucket + resolved containment (defense in depth).
+  const bucket = sanitizeAssetBucket(options.bucket);
+  const slug = sanitizeAssetSlug(options.slug);
   const assetsDir = getRuntimePaths().library.assetsManagedDir;
-  const outputDir = path.join(assetsDir, relativeDir);
+  const outputDir = resolveAssetUploadDirectory(assetsDir, { bucket, slug });
+  const relativeDir = path.relative(assetsDir, outputDir);
+  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(`${sourceName}-${Date.now()}`)}${extension}`;
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, fileName);
   await writeFileAtomic(outputPath, Buffer.from(options.bytes));

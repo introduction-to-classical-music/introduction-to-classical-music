@@ -34,7 +34,7 @@ describe("local site export", () => {
 
     // Owner: local build keeps local links; export-site is public and audits output.
     expect(ownerServer).toMatch(/app\.post\("\/api\/library\/build-site"[\s\S]{0,400}siteOutputMode: "local"/);
-    expect(ownerServer).toMatch(/app\.post\("\/api\/library\/export-site"[\s\S]{0,900}siteOutputMode: "public"/);
+    expect(ownerServer).toMatch(/app\.post\("\/api\/library\/export-site"[\s\S]{0,2400}siteOutputMode: "public"/);
     expect(ownerServer).toContain("auditSiteOutputForLocalPaths");
     expect(ownerServer).toContain("strippedLocalLinks");
 

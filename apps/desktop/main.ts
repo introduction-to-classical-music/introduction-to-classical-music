@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { getRuntimePaths, resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
+import { isAllowedExternalTarget } from "../../packages/data-core/src/open-target.js";
 import { needsSiteRebuild } from "../../packages/data-core/src/site-rebuild.js";
 
 type ManagedService = {
@@ -91,6 +92,24 @@ let localResourceAccessModulePromise: Promise<typeof import("../../packages/data
 let siteBuildModulePromise: Promise<typeof import("../../packages/data-core/src/site-build-runner.js")> | null = null;
 let localSiteServerPromise: Promise<LocalSiteServer> | null = null;
 let siteSourceMtimePromise: Promise<number> | null = null;
+// Paths the user explicitly picked in a native dialog; local-resource opening
+// accepts these in addition to paths registered in the active library.
+const recentlyPickedLocalResourcePaths = new Set<string>();
+
+function rememberPickedLocalResourcePath(targetPath: string) {
+  const resolved = path.resolve(String(targetPath || "").trim());
+  if (!resolved) {
+    return resolved;
+  }
+  recentlyPickedLocalResourcePaths.add(resolved);
+  if (recentlyPickedLocalResourcePaths.size > 32) {
+    const oldest = recentlyPickedLocalResourcePaths.values().next().value;
+    if (oldest) {
+      recentlyPickedLocalResourcePaths.delete(oldest);
+    }
+  }
+  return resolved;
+}
 
 if (process.platform === "win32") {
   app.setAppUserModelId(desktopAppUserModelId);
@@ -724,7 +743,12 @@ ipcMain.handle("launcher:open-library-folder", async () => {
 });
 
 ipcMain.handle("desktop:open-external", async (_event, target: string) => {
-  await shell.openExternal(target);
+  const normalizedTarget = String(target ?? "").trim();
+  // W3: shell.openExternal must never see file:/javascript:/smb:/... schemes.
+  if (!isAllowedExternalTarget(normalizedTarget)) {
+    throw new Error("Unsupported external link protocol");
+  }
+  await shell.openExternal(normalizedTarget);
 });
 
 ipcMain.handle("desktop:open-local-resource", async (_event, target: string) => {
@@ -737,7 +761,10 @@ ipcMain.handle("desktop:open-local-resource", async (_event, target: string) => 
     libraryRootDir: summary.rootDir,
     assetsDirs: [runtimePaths.library.assetsDir],
     contentDirs: [runtimePaths.library.contentLibraryDir, runtimePaths.library.contentSiteDir],
-    registeredLocalPaths: access.collectRegisteredLocalResourcePaths(library),
+    registeredLocalPaths: [
+      ...access.collectRegisteredLocalResourcePaths(library),
+      ...recentlyPickedLocalResourcePaths,
+    ],
   });
   const openError = await shell.openPath(resolvedTarget);
   if (openError) {
@@ -776,7 +803,11 @@ ipcMain.handle("desktop:activate-library", async (_event, rootDir: string) => {
 });
 
 ipcMain.handle("desktop:pick-local-resource-file", async () => {
-  return pickFile("\u9009\u62e9\u672c\u5730\u8d44\u6e90\u6587\u4ef6");
+  const picked = await pickFile("\u9009\u62e9\u672c\u5730\u8d44\u6e90\u6587\u4ef6");
+  if (!picked.canceled && picked.path) {
+    rememberPickedLocalResourcePath(picked.path);
+  }
+  return picked;
 });
 
 ipcMain.handle("launcher:window-control", (event, action: string) => {

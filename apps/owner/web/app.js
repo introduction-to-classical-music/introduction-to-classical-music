@@ -992,11 +992,15 @@ const setResult = (value) => {
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || "请求失败");
+    const error = new Error(payload.error || "请求失败");
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
   }
   return payload;
 };
@@ -2077,6 +2081,11 @@ const readRecordingLinkDialogValue = () =>
 const openManagedResourceLink = async (link) => {
   const normalized = normalizeStructuredLink(link);
   if (normalized.linkType === "local") {
+    // W3: prefer the Electron IPC bridge (main-process whitelist); the owner
+    // HTTP endpoint stays as a browser-only fallback for registered links.
+    if (typeof window.desktopLauncher?.openLocalResource === "function") {
+      return window.desktopLauncher.openLocalResource(normalized.localPath);
+    }
     return fetchJson("/api/open-resource", {
       method: "POST",
       body: JSON.stringify(normalized),
@@ -6403,7 +6412,31 @@ librarySiteExportButton?.addEventListener("click", async () => {
   try {
     const destinationPath = await promptDestination("请选择静态网站导出目录。维护者可直接选择站点部署仓库的目标目录。", "directory");
     if (!destinationPath) return;
-    const result = await fetchJson("/api/library/export-site", { method: "POST", body: JSON.stringify({ destinationPath, siteBase: "./" }) });
+    const exportSite = (overwrite) =>
+      fetchJson("/api/library/export-site", {
+        method: "POST",
+        body: JSON.stringify({ destinationPath, siteBase: "./", overwrite: Boolean(overwrite) }),
+      });
+    let result;
+    try {
+      result = await exportSite(false);
+    } catch (error) {
+      // W3: non-empty destinations require an explicit confirmation instead of
+      // being silently deleted by the server.
+      if (!error?.payload?.needsOverwrite) {
+        throw error;
+      }
+      const confirmation = await requestInput({
+        title: "目标目录非空",
+        message: "目标目录已有文件。输入“覆盖”将清空该目录后重新导出，输入其他内容取消。",
+        value: "",
+      });
+      if (compact(confirmation) !== "覆盖") {
+        setResult("已取消静态网站导出。");
+        return;
+      }
+      result = await exportSite(true);
+    }
     setResult(`静态网站已导出到：${result.outputDir}${result.notice ? `（${result.notice}）` : ""}`);
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));

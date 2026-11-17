@@ -82,7 +82,14 @@ import {
   unlinkOwnerEntityRelation,
 } from "../../../packages/data-core/src/owner-entity-helpers.js";
 import { createLocalSiteServer } from "../../../packages/data-core/src/local-site-server.js";
-import { openTargetInShell } from "../../../packages/data-core/src/open-target.js";
+import { isAllowedExternalTarget, openTargetInShell } from "../../../packages/data-core/src/open-target.js";
+import { assertExportDestinationSafe } from "../../../packages/data-core/src/export-destination.js";
+import { fetchRemoteImage } from "../../../packages/data-core/src/remote-image-guard.js";
+import {
+  collectRegisteredLocalResourcePaths,
+  resolveAllowedLocalResourceTarget,
+} from "../../../packages/data-core/src/local-resource-access.js";
+import { sanitizeAssetUploadRequest } from "../../../packages/data-core/src/asset-upload-policy.js";
 import { createEntityId, createSlug } from "../../../packages/shared/src/slug.js";
 import { mergeSiteConfigPatch } from "../../../packages/data-core/src/site-content.js";
 import { runAutomationChecks } from "../../../packages/automation/src/automation-checks.js";
@@ -270,39 +277,43 @@ app.get("/favicon.svg", async (_request, response, next) => {
 });
 app.get("/api/remote-image", async (request, response) => {
   try {
-    const url = new URL(String(request.query.url || ""));
-    if (!["http:", "https:"].includes(url.protocol)) {
-      response.status(400).json({ error: "Unsupported image protocol" });
-      return;
-    }
-    const upstream = await fetchWithWindowsFallback(url, {
-      headers: {
-        Accept: "image/*,*/*;q=0.8",
-      },
-    }, { fetchImpl: fetch });
-    if (!upstream.ok) {
-      response.status(upstream.status).json({ error: `Remote image request failed: ${upstream.status}` });
-      return;
-    }
-    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+    // W3/A3: resolve + block private/loopback/link-local/multicast addresses,
+    // enforce an image content-type allow-list, a 10MB size cap and a timeout.
+    const security = getOwnerSecurityConfig();
+    const { bytes, contentType } = await fetchRemoteImage(String(request.query.url || ""), {
+      fetchImpl: security.fetchImpl,
+      resolveHostAddresses: security.resolveHostAddresses,
+    });
     response.setHeader("Cache-Control", "public, max-age=1800");
-    response.type(contentType).send(Buffer.from(await upstream.arrayBuffer()));
+    response.type(contentType).send(bytes);
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 app.post("/api/open-resource", async (request, response) => {
   try {
+    const security = getOwnerSecurityConfig();
+    const openTarget = security.openTarget || openTargetInShell;
     const linkType = String(request.body?.linkType || "external").trim() === "local" ? "local" : "external";
     if (linkType === "local") {
-      const localPath = path.resolve(String(request.body?.localPath || "").trim());
+      const localPath = String(request.body?.localPath || "").trim();
+      // Empty localPath used to resolve to the current working directory and
+      // was opened by the shell. Reject it before touching the filesystem.
       if (!localPath) {
         response.status(400).json({ error: "Missing localPath" });
         return;
       }
-      await access(localPath);
-      await openTargetInShell(localPath);
-      response.json({ opened: true, target: localPath, linkType });
+      const runtimePaths = getRuntimePaths();
+      const summary = await getActiveLibrarySummary();
+      const library = await loadLibraryFromDisk();
+      const resolvedLocalPath = await resolveAllowedLocalResourceTarget(localPath, {
+        libraryRootDir: summary.rootDir,
+        assetsDirs: [runtimePaths.library.assetsDir],
+        contentDirs: [runtimePaths.library.contentLibraryDir, runtimePaths.library.contentSiteDir],
+        registeredLocalPaths: collectRegisteredLocalResourcePaths(library),
+      });
+      await openTarget(resolvedLocalPath);
+      response.json({ opened: true, target: resolvedLocalPath, linkType });
       return;
     }
 
@@ -311,8 +322,11 @@ app.post("/api/open-resource", async (request, response) => {
       response.status(400).json({ error: "Missing url" });
       return;
     }
-    new URL(url);
-    await openTargetInShell(url);
+    if (!isAllowedExternalTarget(url)) {
+      response.status(400).json({ error: "Unsupported url protocol" });
+      return;
+    }
+    await openTarget(url);
     response.json({ opened: true, target: url, linkType });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
@@ -1132,6 +1146,21 @@ app.post("/api/library/export-site", async (request, response) => {
   try {
     const destinationPath = String(request.body?.destinationPath || "").trim();
     if (!destinationPath) return response.status(400).json({ error: "Missing site export destination path" });
+    // W3/A3: never recursively delete a caller-controlled path without checks.
+    let resolvedTarget;
+    try {
+      resolvedTarget = await assertExportDestinationSafe(destinationPath, {
+        overwrite: Boolean(request.body?.overwrite),
+        activeLibraryRoot: runtimePaths.library.rootDir,
+      });
+    } catch (error) {
+      const code = String(error?.code || "destination-invalid");
+      return response.status(code === "destination-not-empty" ? 409 : 400).json({
+        error: error instanceof Error ? error.message : String(error),
+        code,
+        needsOverwrite: code === "destination-not-empty",
+      });
+    }
     const stagingPath = path.join(runtimePaths.appData.cacheDir, `site-export-${Date.now()}`);
     await mkdir(path.dirname(stagingPath), { recursive: true });
     const buildResult = await buildLibrarySite({
@@ -1140,7 +1169,6 @@ app.post("/api/library/export-site", async (request, response) => {
       buildSource: "export",
       siteOutputMode: "public",
     });
-    const resolvedTarget = path.resolve(destinationPath);
     const replacement = `${resolvedTarget}.staging-${Date.now()}`;
     await rm(replacement, { recursive: true, force: true });
     await cp(buildResult.outputDir, replacement, { recursive: true, force: true });
@@ -1768,10 +1796,13 @@ app.post("/api/assets/upload", async (request, response) => {
       return;
     }
 
+    // W3/A3: bucket allow-list, safe slug, extension allow-list and resolved
+    // containment inside the managed assets directory (no `../` traversal).
+    const sanitized = sanitizeAssetUploadRequest({ bucket, slug, fileName });
     const src = await persistUploadedImageAsset({
-      bucket,
-      slug,
-      fileName,
+      bucket: sanitized.bucket,
+      slug: sanitized.slug,
+      fileName: sanitized.fileName,
       bytes: decodeBase64Bytes(contentBase64),
     });
 

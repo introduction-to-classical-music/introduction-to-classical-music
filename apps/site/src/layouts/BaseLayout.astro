@@ -32,8 +32,8 @@ const { title, description = "" } = Astro.props;
     <script is:inline>
       // Local resource links are opened through the Electron preload bridge
       // (`desktop:open-local-resource`, validated in the main process). The old
-      // same-origin `/__local-resource` GET endpoint has been removed, so a
-      // plain browser only gets an explicit "desktop app" hint.
+      // same-origin local-resource GET endpoint has been removed, so a plain
+      // browser only gets an explicit "desktop app" hint.
       (() => {
         let hintTimer = 0;
 
