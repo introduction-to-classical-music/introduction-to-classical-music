@@ -69,6 +69,7 @@
   },
   "scripts": {
     "audit:text": "node scripts/audit-text-encoding.mjs",
+    "audit:secrets": "node scripts/audit-secrets.mjs",
     "assets:prepare": "node scripts/prepare-shared-assets.mjs",
     "bootstrap:windows": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap-windows.ps1",
     "doctor:windows": "powershell -ExecutionPolicy Bypass -File scripts/doctor-windows.ps1",
@@ -101,7 +102,7 @@
     "desktop:portable:build": "node scripts/clean-portable-release.mjs && npm run build && node scripts/build-portable-release.mjs",
     "package:windows": "npm run doctor:windows && npm run desktop:dist",
     "astro:check": "node --max-old-space-size=8192 node_modules/astro/astro.js check --root apps/site",
-    "check": "npm run assets:prepare && npm run audit:text && npm run entity-vitals:audit && npm run astro:check && vitest run",
+    "check": "npm run assets:prepare && npm run audit:text && npm run audit:secrets && npm run entity-vitals:audit && npm run astro:check && vitest run",
     "runtime:build": "tsc -p tsconfig.runtime.json"
   },
   "dependencies": {

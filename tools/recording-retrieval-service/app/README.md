@@ -100,6 +100,7 @@ tools/recording-retrieval-service/
 便携包脚本位于 `packaging/build-portable.ps1`，当前策略是：
 
 - 使用 `PyInstaller onedir`（单目录可执行包）生成 `recording-retrieval-service.exe`
+- 数据文件只打包 `packaging/materials-whitelist.json` 白名单内的非敏感材料（来源规则/别名文件）；**不打包**整个 `materials/`，用户本地配置、密钥、缓存与下载目录一律不进包
 - 附带 `start-service.cmd` 与 `start-ui.cmd`
 - 每次输出新的发布目录到 `dist/releases/`
 - 同时刷新 `dist/portable/`，它始终指向当前最新的一份便携目录

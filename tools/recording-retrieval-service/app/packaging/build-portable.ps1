@@ -46,6 +46,21 @@ foreach ($legacyLlmPath in $sensitiveLegacyLlmPaths) {
   }
 }
 
+# Defense in depth (W1b): the PyInstaller spec only packs the explicit
+# `packaging/materials-whitelist.json` allow-list, so the checks below must pass
+# without relying on the compatibility deletion above. A regression in the spec
+# fails the build instead of silently shipping user-local config or secrets.
+$verifyScript = Join-Path $PSScriptRoot "assert-portable-bundle.ps1"
+if (-not (Test-Path -LiteralPath $verifyScript)) {
+  throw "Missing portable bundle verification script: $verifyScript"
+}
+foreach ($bundleRoot in @($bundle, $latestBundle)) {
+  & $verifyScript -BundleRoot $bundleRoot -WhitelistPath (Join-Path $PSScriptRoot "materials-whitelist.json")
+  if ($LASTEXITCODE -ne 0) {
+    throw "Portable bundle verification failed: $bundleRoot"
+  }
+}
+
 if (Test-Path $zipPath) {
   Remove-Item -Force $zipPath
 }

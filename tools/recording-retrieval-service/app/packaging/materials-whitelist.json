@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "rrs-materials-whitelist-v1",
+  "note": "Explicit allow-list of non-sensitive materials files that the packaged service needs at runtime. PyInstaller must never ship the whole materials/ tree. Never add API keys, user-local config, caches or downloads here.",
+  "files": [
+    "materials/source-profiles/high-quality.txt",
+    "materials/source-profiles/streaming.txt",
+    "materials/source-profiles/orchestra-abbreviations.txt",
+    "materials/source-profiles/Orchestra Abbreviation Comparison.txt",
+    "materials/source-profiles/person-name-aliases.txt"
+  ]
+}
