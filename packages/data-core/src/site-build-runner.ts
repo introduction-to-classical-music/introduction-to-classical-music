@@ -3,7 +3,8 @@ import { once } from "node:events";
 import { access, appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { APP_VERSION, getRuntimePaths } from "./app-paths.js";
+import { getRuntimePaths } from "./app-paths.js";
+import { getAppVersion } from "./app-version.js";
 import { syncLibraryAssetsToBuildSite } from "./library-build.js";
 import { writeGeneratedArtifacts } from "./library-store.js";
 import { createSiteBuildEnvironment } from "./site-runtime.js";
@@ -81,21 +82,35 @@ async function runAstroBuild(options: { outputDir?: string; siteBase?: string } 
   }
 }
 
-async function writeBuildMetadata(outputDir = getRuntimePaths().library.buildSiteDir) {
+/**
+ * Where a build came from, recorded in `.icm-build-meta.json` for traceability.
+ * - `local`: desktop "open library site" build (default)
+ * - `cli`: default-library / seed build (`scripts/build-library-site.ts`)
+ * - `export`: public release export (`scripts/export-site-release.mjs`)
+ */
+export type LibrarySiteBuildSource = "local" | "cli" | "export";
+
+export type BuildMetadataOptions = {
+  buildSource?: LibrarySiteBuildSource;
+  siteBase?: string;
+};
+
+export async function writeBuildMetadata(
+  outputDir = getRuntimePaths().library.buildSiteDir,
+  options: BuildMetadataOptions = {},
+) {
   const resolvedOutputDir = path.resolve(outputDir);
   const metadataPath = path.join(resolvedOutputDir, ".icm-build-meta.json");
+  const metadata: Record<string, unknown> = {
+    appVersion: getAppVersion(),
+    buildSource: options.buildSource || "local",
+  };
+  if (options.siteBase) {
+    metadata.siteBase = options.siteBase;
+  }
+  metadata.builtAt = new Date().toISOString();
   await mkdir(resolvedOutputDir, { recursive: true });
-  await writeFileIfChanged(
-    metadataPath,
-    `${JSON.stringify(
-      {
-        appVersion: APP_VERSION,
-        builtAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  await writeFileIfChanged(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
 async function collectStaticTextFiles(rootDir: string): Promise<string[]> {
@@ -136,6 +151,7 @@ async function writeFileIfChanged(targetPath: string, content: string) {
 }
 
 export type LibrarySiteBuildOptions = {
+  buildSource?: LibrarySiteBuildSource;
   includeLocalOnlyLinks?: boolean;
   outputDir?: string;
   siteBase?: string;
@@ -144,7 +160,7 @@ export type LibrarySiteBuildOptions = {
 export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}) {
   const runtimePaths = getRuntimePaths();
   const outputDir = path.resolve(options.outputDir || runtimePaths.library.buildSiteDir);
-  const { includeLocalOnlyLinks, siteBase } = options;
+  const { buildSource, includeLocalOnlyLinks, siteBase } = options;
   await writeBuildRuntimeLog(`buildLibrarySite: begin root=${runtimePaths.library.rootDir}`);
   await writeBuildRuntimeLog("buildLibrarySite: writeGeneratedArtifacts:start");
   await writeGeneratedArtifacts({ includeLocalOnlyLinks });
@@ -159,7 +175,7 @@ export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}) {
   });
   await rewriteRelativeSiteLinks(outputDir, siteBase);
   await writeBuildRuntimeLog("buildLibrarySite: syncLibraryAssets:done");
-  await writeBuildMetadata(outputDir);
+  await writeBuildMetadata(outputDir, { buildSource, siteBase });
   await writeBuildRuntimeLog("buildLibrarySite: writeBuildMetadata:done");
   return {
     outputDir,

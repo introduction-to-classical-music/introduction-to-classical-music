@@ -58,7 +58,7 @@ try {
   await rm(outputDir, { recursive: true, force: true });
   await mkdir(outputDir, { recursive: true });
   const { buildLibrarySite } = await import("../output/runtime/packages/data-core/src/site-build-runner.js");
-  await buildLibrarySite({ outputDir, siteBase });
+  await buildLibrarySite({ outputDir, siteBase, buildSource: "export" });
   await writeFile(path.join(outputDir, ".nojekyll"), "", "utf8");
 
   const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));

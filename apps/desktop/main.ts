@@ -9,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
+import { needsSiteRebuild } from "../../packages/data-core/src/site-rebuild.js";
 
 type ManagedService = {
   child: ChildProcess;
@@ -112,6 +113,9 @@ function primeRuntimeEnvironment() {
   process.env.ICM_RUNTIME_MODE = "bundle";
   process.env.ICM_DEFAULT_LIBRARY_DIR = resolvePreferredDefaultLibraryDir();
   process.env.ICM_SITE_BASE = "/";
+  // Single version source (F08): data-core reads this instead of a hardcoded
+  // APP_VERSION constant, so build metadata always matches the installer.
+  process.env.ICM_APP_VERSION = app.getVersion();
 }
 
 async function migrateLegacyInstalledLibraryIfNeeded() {
@@ -191,27 +195,37 @@ async function getSiteSourceReferenceMtime() {
   return siteSourceMtimePromise;
 }
 
-async function shouldRebuildLibrarySite(summary: LibrarySummary) {
+async function resolveSiteRebuildState(summary: LibrarySummary) {
   const indexPath = path.join(summary.buildSiteDir, "index.html");
   const metadataPath = path.join(summary.buildSiteDir, ".icm-build-meta.json");
-  let indexStat;
+  let indexMtimeMs: number | null = null;
   try {
-    indexStat = await stat(indexPath);
+    indexMtimeMs = (await stat(indexPath)).mtimeMs;
   } catch {
-    return true;
+    indexMtimeMs = null;
   }
 
+  let metaVersion: string | null = null;
   try {
-    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { appVersion?: string };
-    if (metadata.appVersion !== app.getVersion()) {
-      return true;
-    }
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { appVersion?: unknown };
+    metaVersion = typeof metadata.appVersion === "string" ? metadata.appVersion : null;
   } catch {
-    return true;
+    metaVersion = null;
   }
 
-  const sourceReferenceMtime = await getSiteSourceReferenceMtime();
-  return sourceReferenceMtime > indexStat.mtimeMs;
+  return {
+    metaVersion,
+    appVersion: app.getVersion(),
+    indexMtimeMs,
+    sourceMtimeMs: await getSiteSourceReferenceMtime(),
+  };
+}
+
+async function shouldRebuildLibrarySite(summary: LibrarySummary) {
+  // A 0.1.0 installation carries a seed site whose metadata says 0.1.0. Running
+  // 0.1.1 rebuilds that site exactly once (expected one-time migration cost),
+  // after which the metadata matches and opening the site does not rebuild.
+  return needsSiteRebuild(await resolveSiteRebuildState(summary));
 }
 
 async function getLocalSiteServerInstance() {

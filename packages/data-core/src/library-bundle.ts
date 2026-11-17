@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import AdmZip from "adm-zip";
 
-import { APP_VERSION, LIBRARY_BUNDLE_SCHEMA_VERSION } from "./app-paths.js";
+import { LIBRARY_BUNDLE_SCHEMA_VERSION } from "./app-paths.js";
+import { getAppVersion } from "./app-version.js";
 
 export type LibraryBundleManifest = {
   schemaVersion: typeof LIBRARY_BUNDLE_SCHEMA_VERSION;
@@ -69,7 +70,7 @@ export async function ensureLibraryBundle(
       libraryName: options.libraryName || path.basename(resolvedRoot) || "My Library",
       createdAt: now,
       updatedAt: now,
-      appMinVersion: options.appMinVersion || APP_VERSION,
+      appMinVersion: options.appMinVersion || getAppVersion(),
     };
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   }

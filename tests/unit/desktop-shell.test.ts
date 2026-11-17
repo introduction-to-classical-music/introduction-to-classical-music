@@ -78,6 +78,8 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain('ipcMain.handle("desktop:activate-library"');
     expect(mainProcess).toContain("restartOwnerServiceAndWindowSoon");
     expect(mainProcess).toContain("app.getVersion()");
+    expect(mainProcess).toContain("process.env.ICM_APP_VERSION = app.getVersion()");
+    expect(mainProcess).toContain("needsSiteRebuild");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');
     expect(mainProcess).toContain('ipcMain.handle("desktop:pick-library-folder"');
