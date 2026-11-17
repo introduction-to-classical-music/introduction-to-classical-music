@@ -30,25 +30,73 @@ const { title, description = "" } = Astro.props;
     </main>
     <SiteFooter />
     <script is:inline>
-      document.addEventListener("click", async (event) => {
-        const trigger = event.target instanceof Element ? event.target.closest('[data-local-resource-link="true"]') : null;
-        if (!(trigger instanceof HTMLAnchorElement)) {
-          return;
-        }
-        event.preventDefault();
-        try {
-          const response = await fetch(trigger.href, {
-            method: "GET",
-            credentials: "same-origin",
-          });
-          if (!response.ok) {
-            const message = await response.text();
-            throw new Error(message || `Failed to open local resource (${response.status})`);
+      // Local resource links are opened through the Electron preload bridge
+      // (`desktop:open-local-resource`, validated in the main process). The old
+      // same-origin `/__local-resource` GET endpoint has been removed, so a
+      // plain browser only gets an explicit "desktop app" hint.
+      (() => {
+        let hintTimer = 0;
+
+        function showLocalResourceHint(message) {
+          let hint = document.getElementById("local-resource-hint");
+          if (!hint) {
+            hint = document.createElement("div");
+            hint.id = "local-resource-hint";
+            hint.setAttribute("role", "status");
+            hint.style.cssText =
+              "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(560px,90vw);" +
+              "background:#2f2a24;color:#f7efe2;padding:10px 16px;border-radius:8px;z-index:9999;" +
+              "font:14px/1.6 system-ui,-apple-system,'Segoe UI',sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.28);";
+            document.body.appendChild(hint);
           }
-        } catch (error) {
-          window.alert(error instanceof Error ? error.message : String(error));
+          hint.textContent = message;
+          window.clearTimeout(hintTimer);
+          hintTimer = window.setTimeout(() => hint.remove(), 6000);
         }
-      });
+
+        async function openLocalResource(trigger) {
+          const target = trigger.getAttribute("data-local-resource-path") || "";
+          const bridge = window.desktopLauncher;
+          if (!bridge || typeof bridge.openLocalResource !== "function") {
+            showLocalResourceHint("该链接指向本地文件，仅可在「不全书」桌面应用中打开。");
+            return;
+          }
+          try {
+            await bridge.openLocalResource(target);
+          } catch (error) {
+            showLocalResourceHint(
+              `无法打开本地文件：${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+
+        function findLocalResourceTrigger(event) {
+          const element = event.target instanceof Element ? event.target : null;
+          const trigger = element ? element.closest('[data-local-resource-link="true"]') : null;
+          return trigger instanceof HTMLElement ? trigger : null;
+        }
+
+        document.addEventListener("click", (event) => {
+          const trigger = findLocalResourceTrigger(event);
+          if (!trigger) {
+            return;
+          }
+          event.preventDefault();
+          void openLocalResource(trigger);
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+          const trigger = findLocalResourceTrigger(event);
+          if (!trigger) {
+            return;
+          }
+          event.preventDefault();
+          void openLocalResource(trigger);
+        });
+      })();
     </script>
   </body>
 </html>

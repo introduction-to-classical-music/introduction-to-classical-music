@@ -9,7 +9,7 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
+import { getRuntimePaths, resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
 import { needsSiteRebuild } from "../../packages/data-core/src/site-rebuild.js";
 
 type ManagedService = {
@@ -86,6 +86,8 @@ let ownerService: ManagedService | null = null;
 let retrievalService: ManagedService | null = null;
 let bootstrapPromise: Promise<LibrarySummary> | null = null;
 let libraryManagerModulePromise: Promise<typeof import("../../packages/data-core/src/library-manager.js")> | null = null;
+let libraryStoreModulePromise: Promise<typeof import("../../packages/data-core/src/library-store.js")> | null = null;
+let localResourceAccessModulePromise: Promise<typeof import("../../packages/data-core/src/local-resource-access.js")> | null = null;
 let siteBuildModulePromise: Promise<typeof import("../../packages/data-core/src/site-build-runner.js")> | null = null;
 let localSiteServerPromise: Promise<LocalSiteServer> | null = null;
 let siteSourceMtimePromise: Promise<number> | null = null;
@@ -142,6 +144,20 @@ async function loadLibraryManagerModule() {
     libraryManagerModulePromise = import("../../packages/data-core/src/library-manager.js");
   }
   return libraryManagerModulePromise;
+}
+
+async function loadLibraryStoreModule() {
+  if (!libraryStoreModulePromise) {
+    libraryStoreModulePromise = import("../../packages/data-core/src/library-store.js");
+  }
+  return libraryStoreModulePromise;
+}
+
+async function loadLocalResourceAccessModule() {
+  if (!localResourceAccessModulePromise) {
+    localResourceAccessModulePromise = import("../../packages/data-core/src/local-resource-access.js");
+  }
+  return localResourceAccessModulePromise;
 }
 
 async function bootstrapActiveLibraryBundle(options: {
@@ -709,6 +725,26 @@ ipcMain.handle("launcher:open-library-folder", async () => {
 
 ipcMain.handle("desktop:open-external", async (_event, target: string) => {
   await shell.openExternal(target);
+});
+
+ipcMain.handle("desktop:open-local-resource", async (_event, target: string) => {
+  await ensureDesktopRuntimeReady();
+  const summary = await getActiveLibraryBundleSummary();
+  const runtimePaths = getRuntimePaths();
+  const [libraryStore, access] = await Promise.all([loadLibraryStoreModule(), loadLocalResourceAccessModule()]);
+  const library = await libraryStore.loadLibraryFromDisk();
+  const resolvedTarget = await access.resolveAllowedLocalResourceTarget(String(target ?? ""), {
+    libraryRootDir: summary.rootDir,
+    assetsDirs: [runtimePaths.library.assetsDir],
+    contentDirs: [runtimePaths.library.contentLibraryDir, runtimePaths.library.contentSiteDir],
+    registeredLocalPaths: access.collectRegisteredLocalResourcePaths(library),
+  });
+  const openError = await shell.openPath(resolvedTarget);
+  if (openError) {
+    throw new Error(`Failed to open local resource: ${openError}`);
+  }
+  writeDesktopLog(`desktop:open-local-resource: ${resolvedTarget}`);
+  return { opened: true, target: resolvedTarget };
 });
 
 ipcMain.handle("desktop:pick-library-folder", async () => {

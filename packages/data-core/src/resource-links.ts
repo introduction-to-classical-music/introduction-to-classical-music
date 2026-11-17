@@ -181,17 +181,14 @@ export function sanitizeResourceLinksForSiteOutput(links: ResourceLink[], option
 /**
  * Presentation for one renderable link.
  *
- * Local links keep the legacy `/__local-resource` href for local-mode builds
- * (desktop/owner local site). Public builds never reach this branch because
- * local/local-only links are stripped from the generated data first; W3 will
- * replace the HTTP endpoint with an Electron IPC bridge.
+ * Local links no longer receive an HTTP href (the old `/__local-resource`
+ * endpoint was a same-origin side-effect GET and has been removed). The site
+ * renders `data-local-resource-path` and the Electron preload bridge opens the
+ * file over IPC; plain browsers show a "desktop app only" hint.
  */
 export function getResourceLinkPresentation(link: ResourceLink) {
   const normalized = normalizeResourceLink(link);
-  const href =
-    normalized.linkType === "local"
-      ? `/__local-resource?path=${encodeURIComponent(normalized.localPath || "")}`
-      : normalized.url;
+  const href = normalized.linkType === "local" ? "" : normalized.url;
 
   return {
     href,

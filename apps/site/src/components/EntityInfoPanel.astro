@@ -27,10 +27,13 @@ const hasContent = Boolean(infoPanel?.text || collectionLinks.length || article)
       {collectionLinks.map((link, index) => (
         <a
           class="entity-info-panel__link"
-          href={withBasePath(link.href)}
+          href={link.href ? withBasePath(link.href) : undefined}
           target={link.linkType === "local" ? undefined : "_blank"}
           rel={link.linkType === "local" ? undefined : "noreferrer"}
           data-local-resource-link={link.linkType === "local" ? "true" : undefined}
+          data-local-resource-path={link.linkType === "local" ? link.localPath || undefined : undefined}
+          tabindex={link.linkType === "local" ? "0" : undefined}
+          role={link.linkType === "local" ? "button" : undefined}
           title={link.metadataTitle || link.localPath || undefined}
         >
           {(link.metadataTitle || link.label || "链接") + (collectionLinks.length > 1 ? ` ${index + 1}` : "")}
