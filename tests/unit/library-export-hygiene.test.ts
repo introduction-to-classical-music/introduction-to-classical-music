@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -6,8 +6,18 @@ import os from "node:os";
 import path from "node:path";
 import AdmZip from "adm-zip";
 
+import { resetAstroBuildLockForTests } from "./support/astro-build-lock.ts";
+
 const originalEnv = { ...process.env };
 const tempDirs: string[] = [];
+
+beforeAll(async () => {
+  await resetAstroBuildLockForTests();
+});
+
+afterAll(async () => {
+  await resetAstroBuildLockForTests();
+});
 
 afterEach(async () => {
   process.env = { ...originalEnv };

@@ -1,11 +1,21 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { resetAstroBuildLockForTests } from "./support/astro-build-lock.ts";
+
 const PAGES_BASE = "/introduction-to-classical-music-sites/";
 const tempDirs: string[] = [];
+
+beforeAll(async () => {
+  await resetAstroBuildLockForTests();
+});
+
+afterAll(async () => {
+  await resetAstroBuildLockForTests();
+});
 
 afterEach(async () => {
   while (tempDirs.length > 0) {
