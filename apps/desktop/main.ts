@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
@@ -15,6 +16,7 @@ type ManagedService = {
   child: ChildProcess;
   port: number;
   url: string;
+  bootstrapToken?: string;
 };
 
 type LibrarySummary = {
@@ -371,6 +373,15 @@ function getAnyDesktopWindow() {
   return BrowserWindow.getFocusedWindow() ?? ownerWindow ?? launcherWindow ?? libraryWindow ?? retrievalWindow ?? undefined;
 }
 
+function createOwnerBootstrapToken() {
+  return randomBytes(32).toString("hex");
+}
+
+function ownerBootstrapUrl(service: Pick<ManagedService, "url" | "bootstrapToken">) {
+  const token = String(service.bootstrapToken || "");
+  return token ? `${service.url}/?bootstrap=${encodeURIComponent(token)}` : service.url;
+}
+
 async function restartOwnerServiceAndWindowSoon() {
   await new Promise((resolve) => setTimeout(resolve, 150));
   if (ownerService) {
@@ -379,7 +390,7 @@ async function restartOwnerServiceAndWindowSoon() {
   }
   if (ownerWindow && !ownerWindow.isDestroyed()) {
     const service = await ensureOwnerService();
-    await ownerWindow.loadURL(service.url);
+    await ownerWindow.loadURL(ownerBootstrapUrl(service));
   }
 }
 
@@ -508,12 +519,14 @@ async function ensureOwnerService() {
 
   const port = await findAvailablePort(4322);
   const summary = await getActiveLibraryBundleSummary();
+  const bootstrapToken = createOwnerBootstrapToken();
   const child = spawn(process.execPath, [ownerServerScriptPath], {
     cwd: getManagedProcessCwd(),
     env: getSharedRuntimeEnv({
       OWNER_PORT: String(port),
       LIBRARY_SITE_PORT: "4331",
       ICM_ACTIVE_LIBRARY_DIR: summary.rootDir,
+      ICM_OWNER_BOOTSTRAP_TOKEN: bootstrapToken,
     }),
     stdio: "ignore",
     windowsHide: true,
@@ -521,16 +534,17 @@ async function ensureOwnerService() {
   child.unref();
   const url = `http://127.0.0.1:${port}`;
   await waitForUrl(url);
-  ownerService = { child, port, url };
+  ownerService = { child, port, url, bootstrapToken };
   writeDesktopLog(`ensureOwnerService: ready at ${url}`);
   return ownerService;
 }
 
 async function openOwnerTool() {
   const service = await ensureOwnerService();
+  const bootstrapUrl = ownerBootstrapUrl(service);
   if (ownerWindow && !ownerWindow.isDestroyed()) {
     ownerWindow.focus();
-    await ownerWindow.loadURL(service.url);
+    await ownerWindow.loadURL(bootstrapUrl);
     return service.url;
   }
   ownerWindow = createWindow({
@@ -540,7 +554,7 @@ async function openOwnerTool() {
   ownerWindow.on("closed", () => {
     ownerWindow = null;
   });
-  await ownerWindow.loadURL(service.url);
+  await ownerWindow.loadURL(bootstrapUrl);
   return service.url;
 }
 

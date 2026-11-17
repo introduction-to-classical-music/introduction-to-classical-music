@@ -1,6 +1,8 @@
 // @ts-nocheck
 import express from "express";
 import path from "node:path";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { access, readFile as readBinaryFile, cp, mkdir, rm, rename } from "node:fs/promises";
 
 import {
@@ -100,6 +102,128 @@ const templateDir = runtimePaths.templateDir;
 const jobManager = createAutomationJobManager();
 const localSiteServer = createLocalSiteServer({
   preferredPort: Number(process.env.LIBRARY_SITE_PORT || 4331),
+});
+
+// --- Owner local-service security (W3 / D3-A) ------------------------------
+//
+// The owner tool is a loopback HTTP service with many side-effect endpoints. It
+// must not be drivable by arbitrary web pages or other local processes:
+//   - a per-run bootstrap token (injected by the desktop process, or generated
+//     by the standalone dev server) is exchanged for an HttpOnly/SameSite=Strict
+//     session cookie via GET /?bootstrap=<token> (302 -> /);
+//   - all /api/* requests require that session cookie;
+//   - the Host header must be 127.0.0.1:<port> (DNS-rebinding protection);
+//   - a present Origin header must be the same loopback origin (CSRF protection).
+const OWNER_SESSION_COOKIE_NAME = "icm_owner_session";
+const OWNER_BOOTSTRAP_ENV = "ICM_OWNER_BOOTSTRAP_TOKEN";
+
+function createOwnerBootstrapToken() {
+  return randomBytes(32).toString("hex");
+}
+
+function resolveOwnerBootstrapToken(env = process.env) {
+  const fromEnvironment = String(env?.[OWNER_BOOTSTRAP_ENV] || "").trim();
+  return fromEnvironment || createOwnerBootstrapToken();
+}
+
+function formatOwnerBootstrapUrl(baseUrl, token) {
+  return `${String(baseUrl).replace(/\/+$/, "")}/?bootstrap=${encodeURIComponent(String(token))}`;
+}
+
+function hashOwnerSessionToken(token) {
+  return createHash("sha256").update(`owner-session:${String(token)}`).digest("hex");
+}
+
+function safeTokenEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left ?? ""), "utf8");
+  const rightBuffer = Buffer.from(String(right ?? ""), "utf8");
+  if (leftBuffer.length === 0 || leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function parseCookieHeader(headerValue) {
+  const cookies = {};
+  for (const part of String(headerValue || "").split(";")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) {
+      continue;
+    }
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (name) {
+      cookies[name] = value;
+    }
+  }
+  return cookies;
+}
+
+function createOwnerSecurityConfig(overrides = {}) {
+  const bootstrapToken = String(
+    overrides.bootstrapToken || resolveOwnerBootstrapToken(process.env),
+  ).trim();
+  return {
+    bootstrapToken,
+    sessionToken: hashOwnerSessionToken(bootstrapToken),
+    sessionCookieName: OWNER_SESSION_COOKIE_NAME,
+    // 0 means "use the actual listening port" (tests listen on port 0).
+    port: Number.isFinite(Number(overrides.port)) ? Number(overrides.port) : Number(process.env.OWNER_PORT || port),
+    openTarget: overrides.openTarget,
+    fetchImpl: overrides.fetchImpl,
+    resolveHostAddresses: overrides.resolveHostAddresses,
+    persistUploadedAsset: overrides.persistUploadedAsset,
+    allowOverwriteExport: Boolean(overrides.allowOverwriteExport),
+  };
+}
+
+function getOwnerSecurityConfig() {
+  if (!app.locals.ownerSecurity) {
+    app.locals.ownerSecurity = createOwnerSecurityConfig({});
+  }
+  return app.locals.ownerSecurity;
+}
+
+app.use((request, response, next) => {
+  const security = getOwnerSecurityConfig();
+  const localPort = security.port || (request.socket && request.socket.localPort) || port;
+  const expectedHost = `127.0.0.1:${localPort}`;
+  const expectedOrigin = `http://${expectedHost}`;
+
+  const hostHeader = String(request.headers.host || "").trim().toLowerCase();
+  if (hostHeader !== expectedHost) {
+    response.status(403).json({ error: "Forbidden owner host" });
+    return;
+  }
+  const originHeader = String(request.headers.origin || "").trim();
+  if (originHeader && originHeader.toLowerCase() !== expectedOrigin) {
+    response.status(403).json({ error: "Forbidden owner origin" });
+    return;
+  }
+
+  if (request.method === "GET" && request.path === "/" && request.query && request.query.bootstrap !== undefined) {
+    const provided = String(request.query.bootstrap || "");
+    if (!safeTokenEquals(provided, security.bootstrapToken)) {
+      response.status(401).json({ error: "Invalid owner bootstrap token" });
+      return;
+    }
+    response.setHeader(
+      "Set-Cookie",
+      `${security.sessionCookieName}=${security.sessionToken}; Path=/; HttpOnly; SameSite=Strict`,
+    );
+    response.redirect(302, "/");
+    return;
+  }
+
+  if (request.path.startsWith("/api/")) {
+    const cookies = parseCookieHeader(request.headers.cookie);
+    if (!safeTokenEquals(cookies[security.sessionCookieName] || "", security.sessionToken)) {
+      response.status(401).json({ error: "Owner session required" });
+      return;
+    }
+  }
+
+  next();
 });
 
 async function writeLocalGeneratedArtifacts() {
@@ -2009,14 +2133,54 @@ app.post("/api/automation/llm/test", async (request, response) => {
   }
 });
 
+/**
+ * Returns the configured owner Express app without listening. Used by tests and
+ * by the standalone/desktop entrypoint (`startOwnerApp`).
+ */
+export function createOwnerApp(options = {}) {
+  app.locals.ownerSecurity = createOwnerSecurityConfig(options);
+  return app;
+}
+
+export const ownerApp = app;
+
+export { resolveOwnerBootstrapToken, formatOwnerBootstrapUrl, hashOwnerSessionToken };
+
 async function startOwnerApp() {
+  const bootstrapToken = resolveOwnerBootstrapToken(process.env);
+  app.locals.ownerSecurity = createOwnerSecurityConfig({ bootstrapToken, port });
   await bootstrapActiveLibrary({ defaultLibraryName: "\u6211\u7684\u8d44\u6599\u5e93", seedFromLegacy: false });
   app.listen(port, "127.0.0.1", () => {
-    process.stdout.write(`Owner tool running at http://127.0.0.1:${port}\n`);
+    const baseUrl = `http://127.0.0.1:${port}`;
+    process.stdout.write(`Owner tool running at ${baseUrl}\n`);
+    if (process.env[OWNER_BOOTSTRAP_ENV]) {
+      process.stdout.write(`Owner bootstrap URL: ${formatOwnerBootstrapUrl(baseUrl, bootstrapToken)}\n`);
+    } else {
+      // Standalone dev mode: never silently allow requests. This one-time URL
+      // (printed once, not logged elsewhere) is required to obtain a session.
+      process.stdout.write(
+        `Owner standalone dev session (one-time bootstrap URL): ${formatOwnerBootstrapUrl(baseUrl, bootstrapToken)}\n`,
+      );
+    }
   });
 }
 
-void startOwnerApp().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  process.exitCode = 1;
-});
+const isDirectlyInvoked = (() => {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  try {
+    return import.meta.url === pathToFileURL(path.resolve(entry)).href;
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectlyInvoked) {
+  void startOwnerApp().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
+

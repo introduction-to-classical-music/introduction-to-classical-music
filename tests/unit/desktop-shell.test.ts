@@ -80,6 +80,10 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain("app.getVersion()");
     expect(mainProcess).toContain("process.env.ICM_APP_VERSION = app.getVersion()");
     expect(mainProcess).toContain("needsSiteRebuild");
+    // W3: the desktop process injects a per-run owner bootstrap token.
+    expect(mainProcess).toContain("ICM_OWNER_BOOTSTRAP_TOKEN");
+    expect(mainProcess).toContain("createOwnerBootstrapToken");
+    expect(mainProcess).toContain("ownerBootstrapUrl");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');
     expect(mainProcess).toContain('ipcMain.handle("desktop:pick-library-folder"');
