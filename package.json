@@ -104,6 +104,8 @@
     "package:windows": "npm run doctor:windows && npm run desktop:dist",
     "astro:check": "node --max-old-space-size=8192 node_modules/astro/astro.js check --root apps/site",
     "check": "npm run assets:prepare && npm run audit:text && npm run audit:secrets && npm run entity-vitals:audit && npm run reference:audit && npm run audit:gate-self-test && npm run astro:check && vitest run",
+    "check:long-paths": "node scripts/check-long-paths.mjs",
+    "check:long-paths:workspace": "node scripts/check-long-paths.mjs --repo . --repo ../../library/Salon_library --repo ../../site-deploy/introduction-to-classical-music-site-deploy --repo tools/recording-retrieval-service/app --warn-only --max-report 15",
     "runtime:build": "tsc -p tsconfig.runtime.json"
   },
   "dependencies": {

@@ -41,3 +41,5 @@
   历史版本产物清单
 - [PROJECT_BOUNDARIES.md](PROJECT_BOUNDARIES.md)
   安装版、便携版、源码仓库与互联网部署的边界定义
+- [data-publication-boundary.md](data-publication-boundary.md)
+  数据公开边界：官方库私有、内部工件/联系方式不公开、公开产物范围与检查方法
