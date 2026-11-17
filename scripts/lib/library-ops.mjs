@@ -34,6 +34,31 @@ const TEXT_EXTENSIONS = new Set([
   ".yaml",
 ]);
 
+// W10a: digests of text content are computed after deterministic EOL
+// normalization so a CRLF working tree and an LF checkout/CI of the same
+// content produce the same digest. Binary files are hashed byte-for-byte.
+const TEXT_DIGEST_EXTENSIONS = new Set([
+  ...TEXT_EXTENSIONS,
+  ".csv",
+  ".mjs",
+  ".svg",
+  ".tsv",
+  ".xml",
+]);
+
+/** Normalize line endings for deterministic text digests (CRLF/CR -> LF). */
+export function normalizeTextEol(value) {
+  return String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+export function isTextDigestPath(relativePath) {
+  return TEXT_DIGEST_EXTENSIONS.has(path.extname(String(relativePath ?? "")).toLowerCase());
+}
+
+function sha256Bytes(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
 function normalizeRelativePath(value) {
   return value.split(path.sep).join("/");
 }
@@ -72,9 +97,12 @@ async function collectFiles(rootDir, relativeDir = "") {
   return files;
 }
 
-async function sha256File(filePath) {
+async function sha256File(filePath, relativePath = filePath) {
   const content = await readFile(filePath);
-  return createHash("sha256").update(content).digest("hex");
+  if (isTextDigestPath(relativePath)) {
+    return sha256Bytes(Buffer.from(normalizeTextEol(content.toString("utf8")), "utf8"));
+  }
+  return sha256Bytes(content);
 }
 
 export async function hashDirectory(rootDir, options = {}) {
@@ -87,7 +115,7 @@ export async function hashDirectory(rootDir, options = {}) {
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
   const entries = [];
   for (const file of files) {
-    entries.push({ path: file.relativePath, sha256: await sha256File(file.absolutePath) });
+    entries.push({ path: file.relativePath, sha256: await sha256File(file.absolutePath, file.relativePath) });
   }
   const digest = createHash("sha256")
     .update(entries.map((entry) => `${entry.path}\0${entry.sha256}\n`).join(""))
