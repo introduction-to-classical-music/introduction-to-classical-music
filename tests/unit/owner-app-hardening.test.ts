@@ -279,6 +279,14 @@ describe("owner API hardening (W3)", () => {
     const driveRootPayload = JSON.parse(driveRoot.body);
     expect(driveRootPayload.code).toBe("destination-root");
 
+    const filesystemRoot = await jsonRequest("/api/library/export-site", { destinationPath: "/" });
+    expect(filesystemRoot.status).toBe(400);
+    expect(JSON.parse(filesystemRoot.body).code).toBe("destination-root");
+
+    const uncRoot = await jsonRequest("/api/library/export-site", { destinationPath: "\\\\server\\share" });
+    expect(uncRoot.status).toBe(400);
+    expect(JSON.parse(uncRoot.body).code).toBe("destination-root");
+
     const nonEmptyDir = path.join(tempRoot, "non-empty-site");
     await mkdir(nonEmptyDir, { recursive: true });
     await writeFile(path.join(nonEmptyDir, "old.html"), "old", "utf8");

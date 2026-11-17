@@ -11,6 +11,21 @@ $latestBundle = Join-Path $dist "portable"
 $pyinstallerBundle = Join-Path $dist "recording-retrieval-service"
 $zipPath = Join-Path $dist "recording-retrieval-service-portable-$timestamp.zip"
 
+# CI runners do not reliably expose `Get-FileHash` (CommandNotFound), so compute
+# SHA-256 through .NET APIs instead; this works on Windows PowerShell 5.1 and
+# PowerShell 7 alike.
+function Get-Sha256Hex([string]$FilePath) {
+  $stream = [System.IO.File]::Open($FilePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+  $algorithm = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $hashBytes = $algorithm.ComputeHash($stream)
+  } finally {
+    $algorithm.Dispose()
+    $stream.Dispose()
+  }
+  return (($hashBytes | ForEach-Object { $_.ToString("x2") }) -join "")
+}
+
 if (-not (Test-Path $python)) {
   throw "Missing local virtual environment: $python"
 }
@@ -80,7 +95,7 @@ if (Test-Path $zipPath) {
   Remove-Item -Force $zipPath
 }
 Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zipPath
-$zipSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$zipSha256 = Get-Sha256Hex -FilePath $zipPath
 $zipBuildInfoPath = "$zipPath.build-info.json"
 & $python (Join-Path $root "app\build_info.py") --app-root $root --bundle-dir $bundle --output $zipBuildInfoPath --pyinstaller-version "$pyinstallerVersion" --portable-zip-sha256 $zipSha256
 if ($LASTEXITCODE -ne 0) {

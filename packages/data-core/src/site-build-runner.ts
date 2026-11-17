@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, open, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { getRuntimePaths } from "./app-paths.js";
@@ -10,6 +10,68 @@ import { writeGeneratedArtifacts } from "./library-store.js";
 import { resolveSiteOutputMode, type SiteOutputMode } from "./resource-links.js";
 import { createSiteBuildEnvironment } from "./site-runtime.js";
 import { auditSiteOutputForLocalPaths, type SiteOutputAudit } from "./site-output-audit.js";
+
+// Astro builds share caches under apps/site/.astro and node_modules; two CI
+// test files (or an owner + CLI build) running concurrently can corrupt each
+// other. Serialize builds across processes with a small lock file.
+const ASTRO_BUILD_LOCK_TIMEOUT_MS = 240_000;
+const ASTRO_BUILD_LOCK_POLL_MS = 250;
+const ASTRO_BUILD_LOCK_STALE_MS = 10 * 60_000;
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+async function acquireAstroBuildLock(repoRoot: string): Promise<() => Promise<void>> {
+  const lockPath = path.join(repoRoot, "output", ".astro-build.lock");
+  await mkdir(path.dirname(lockPath), { recursive: true });
+  const token = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const startedAt = Date.now();
+  for (;;) {
+    try {
+      const handle = await open(lockPath, "wx");
+      try {
+        await handle.writeFile(
+          `${JSON.stringify({ token, pid: process.pid, createdAt: new Date().toISOString() })}\n`,
+          "utf8",
+        );
+      } finally {
+        await handle.close();
+      }
+      return async () => {
+        try {
+          const content = await readFile(lockPath, "utf8");
+          if (!content.includes(token)) {
+            return; // another process owns a newer lock; never remove it
+          }
+          await unlink(lockPath);
+        } catch {
+          // already released or unreadable: nothing else to do
+        }
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+      try {
+        const lockStats = await stat(lockPath);
+        if (Date.now() - lockStats.mtimeMs > ASTRO_BUILD_LOCK_STALE_MS) {
+          await unlink(lockPath).catch(() => undefined);
+          continue;
+        }
+      } catch {
+        // lock disappeared between open and stat: retry immediately
+        continue;
+      }
+      if (Date.now() - startedAt > ASTRO_BUILD_LOCK_TIMEOUT_MS) {
+        throw new Error(`Timed out waiting for the Astro build lock: ${lockPath}`);
+      }
+      await delay(ASTRO_BUILD_LOCK_POLL_MS);
+    }
+  }
+}
 
 function resolveRuntimeWorkingDirectory(repoRoot: string) {
   const normalized = path.resolve(repoRoot);
@@ -71,8 +133,11 @@ async function runAstroBuild(options: { outputDir?: string; siteBase?: string } 
   child.stdout?.on("data", (chunk) => {
     void writeBuildRuntimeLog(`runAstroBuild: stdout ${String(chunk).trimEnd()}`);
   });
+  let stderrTail = "";
   child.stderr?.on("data", (chunk) => {
-    void writeBuildRuntimeLog(`runAstroBuild: stderr ${String(chunk).trimEnd()}`);
+    const text = String(chunk);
+    stderrTail = `${stderrTail}${text}`.slice(-8000);
+    void writeBuildRuntimeLog(`runAstroBuild: stderr ${text.trimEnd()}`);
   });
   child.once("error", (error) => {
     void writeBuildRuntimeLog(`runAstroBuild: child error ${error.message}`);
@@ -80,7 +145,10 @@ async function runAstroBuild(options: { outputDir?: string; siteBase?: string } 
   const [code] = await once(child, "exit");
   await writeBuildRuntimeLog(`runAstroBuild: exit code=${String(code)}`);
   if (code !== 0) {
-    throw new Error(`Astro build failed with exit code ${code}`);
+    const diagnostic = stderrTail.trim();
+    throw new Error(
+      `Astro build failed with exit code ${code}${diagnostic ? `: ${diagnostic}` : " (no stderr captured)"}`,
+    );
   }
 }
 
@@ -187,7 +255,12 @@ export async function buildLibrarySite(options: LibrarySiteBuildOptions = {}): P
     `buildLibrarySite: writeGeneratedArtifacts:done strippedLocalLinks=${generated.strippedLocalLinks}`,
   );
   await writeBuildRuntimeLog("buildLibrarySite: runAstroBuild:start");
-  await runAstroBuild({ outputDir, siteBase });
+  const releaseBuildLock = await acquireAstroBuildLock(runtimePaths.repoRoot);
+  try {
+    await runAstroBuild({ outputDir, siteBase });
+  } finally {
+    await releaseBuildLock();
+  }
   await writeBuildRuntimeLog("buildLibrarySite: runAstroBuild:done");
   await writeBuildRuntimeLog("buildLibrarySite: syncLibraryAssets:start");
   await syncLibraryAssetsToBuildSite({

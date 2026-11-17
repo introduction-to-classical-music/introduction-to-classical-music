@@ -145,6 +145,17 @@ tools/recording-retrieval-service/
 - `GET /health` 可达
 - `protocolVersion === "v1"`
 
+## 父项目评测数据（parent-work eval）
+
+`app/services/parent_work_eval.py` 默认向上查找父项目的 `data/library/works.json`。在**独立 checkout**（例如 RRS standalone CI）中没有父项目目录时，用环境变量显式指定父项目工作区根目录：
+
+```powershell
+$env:RRS_WORKSPACE_ROOT = "<parent-project-root>"
+python -m pytest -m "not network" -q
+```
+
+RRS CI 会 checkout 公开父仓库到 `parent/` 并设置 `RRS_WORKSPACE_ROOT=${{ github.workspace }}/parent`；未设置该变量时保留原有“向上查找父项目”的行为，父仓库内运行时无需配置。
+
 ## 非目标
 
 - 不直接修改项目数据文件

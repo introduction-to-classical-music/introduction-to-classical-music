@@ -39,7 +39,27 @@ export function getSystemExportRoots(): string[] {
     process.env.ProgramData,
     process.platform === "win32" ? "C:\\Windows" : "",
   ];
-  return [...new Set(candidates.map((value) => String(value || "").trim()).filter(Boolean))];
+  // POSIX CI/Linux runs must reject the same class of dangerous destinations as
+  // Windows; only add roots below /home, /tmp, /mnt, ... which remain usable.
+  const posixSystemRoots =
+    process.platform === "win32"
+      ? []
+      : ["/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot", "/dev", "/proc", "/sys"];
+  return [...new Set([...candidates, ...posixSystemRoots].map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+const WINDOWS_DRIVE_ROOT_PATTERN = /^[A-Za-z]:[\\/]*$/;
+const UNC_SHARE_ROOT_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+[\\/]?$/;
+
+/**
+ * Raw-input check for Windows drive roots (C:\, D:/, C:) and UNC share roots
+ * (\\server\share, //server/share). This is intentionally platform-independent:
+ * on Linux/CI `path.resolve("C:\\")` is a relative path inside the cwd, but the
+ * policy still refuses the caller-supplied root form.
+ */
+export function isWindowsDriveOrShareRoot(destinationPath: string): boolean {
+  const trimmed = String(destinationPath ?? "").trim();
+  return WINDOWS_DRIVE_ROOT_PATTERN.test(trimmed) || UNC_SHARE_ROOT_PATTERN.test(trimmed);
 }
 
 export function assertExportDestinationAllowed(
@@ -50,9 +70,16 @@ export function assertExportDestinationAllowed(
   if (!trimmed) {
     throw failure("destination-required", "Missing site export destination path");
   }
+  if (isWindowsDriveOrShareRoot(trimmed)) {
+    throw failure("destination-root", "Refusing to export to a drive or share root");
+  }
   const resolved = path.resolve(trimmed);
 
-  // Drive roots (C:\, D:/) and UNC share roots (\\server\share) are never valid.
+  // Filesystem roots ("/" on POSIX, "C:\" on Windows) are never valid.
+  if (resolved === path.parse(resolved).root) {
+    throw failure("destination-root", "Refusing to export to a filesystem root");
+  }
+  // Defense in depth for resolved Windows drive/UNC roots.
   if (/^[A-Za-z]:[\\/]?$/.test(resolved) || /^\\\\[^\\]+\\[^\\]+\\?$/.test(resolved)) {
     throw failure("destination-root", "Refusing to export to a drive or share root");
   }

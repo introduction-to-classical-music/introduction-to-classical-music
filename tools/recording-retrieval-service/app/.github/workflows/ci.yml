@@ -8,8 +8,16 @@ on:
 jobs:
   offline-pytest:
     runs-on: windows-latest
+    env:
+      RRS_WORKSPACE_ROOT: ${{ github.workspace }}/parent
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout parent project (public data/library for eval tests)
+        uses: actions/checkout@v4
+        with:
+          repository: introduction-to-classical-music/introduction-to-classical-music
+          path: parent
+          fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -19,5 +27,7 @@ jobs:
           python -m pip install -e ".[dev]"
       - name: Compile check
         run: python -m compileall -q app
+      - name: Verify parent workspace fixture is available
+        run: python -c "import os, pathlib; root = pathlib.Path(os.environ['RRS_WORKSPACE_ROOT']); assert (root / 'data' / 'library' / 'works.json').exists(), root"
       - name: Offline pytest (network tests excluded)
         run: python -m pytest -m "not network" -q

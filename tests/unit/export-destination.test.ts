@@ -47,6 +47,31 @@ describe("export destination policy (W3)", () => {
     ).toThrow(/inside the active library/);
   });
 
+  // CI runs this suite on Linux and Windows: the product policy refuses the
+  // Windows root forms by inspecting the raw input, not the platform-resolved
+  // path, so these expectations hold everywhere.
+  it("rejects Windows drive and UNC roots on every platform", () => {
+    for (const destination of ["C:\\", "C:/", "D:\\", "d:/", "C:", "\\\\server\\share", "\\\\server\\share\\", "//server/share", "//server/share/"]) {
+      expect(() => assertExportDestinationAllowed(destination), destination).toThrow(/drive or share root/);
+    }
+  });
+
+  it("rejects the filesystem root on every platform", () => {
+    expect(() => assertExportDestinationAllowed("/")).toThrow(/filesystem root|drive or share root/);
+    expect(() => assertExportDestinationAllowed(" / ")).toThrow(/filesystem root|drive or share root/);
+  });
+
+  it.runIf(process.platform !== "win32")("rejects POSIX system directories by default", () => {
+    for (const destination of ["/etc", "/usr/bin", "/bin", "/proc/self", "/sys/kernel"]) {
+      expect(() => assertExportDestinationAllowed(destination), destination).toThrow(/system directory/);
+    }
+  });
+
+  it.runIf(process.platform !== "win32")("still allows normal POSIX user directories", () => {
+    const root = path.join(os.tmpdir(), `classical-posix-export-${Date.now()}`);
+    expect(assertExportDestinationAllowed(root)).toBe(path.resolve(root));
+  });
+
   it("allows a new directory and rejects an existing file", async () => {
     const root = await createTempRoot();
     const target = path.join(root, "new-site");
