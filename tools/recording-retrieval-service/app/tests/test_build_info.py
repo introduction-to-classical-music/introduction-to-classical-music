@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tomllib
 from pathlib import Path
 
@@ -78,10 +79,18 @@ def test_protocol_path_resolution_env_and_fallbacks(monkeypatch, tmp_path: Path)
     assert _resolve_protocol_path(app_root) == app_root / "PROTOCOL.md"
 
 
-def test_requirements_lock_present_and_marked_as_draft():
+def test_requirements_lock_is_a_real_pip_freeze_with_key_pins():
     lock_text = (APP_ROOT / "requirements.lock").read_text(encoding="utf-8")
-    assert "BLOCKED" in lock_text
-    assert "fastapi==0.115.0" in lock_text
+    # Real lock generated from the verified offline build virtualenv (W8 build);
+    # it must not regress to the earlier BLOCKED/DRAFT placeholder.
+    assert "python -m pip freeze --exclude-editable" in lock_text
+    assert "BLOCKED" not in lock_text
+    assert "DRAFT" not in lock_text
+    for package in ("fastapi", "httpx", "playwright", "pydantic", "uvicorn", "pyinstaller", "pytest"):
+        assert re.search(rf"(?m)^{re.escape(package)}==", lock_text), f"missing pin for {package} in requirements.lock"
+    pins = re.findall(r"(?m)^([A-Za-z0-9_.-]+)==", lock_text)
+    assert len(pins) == len(set(pins)), "requirements.lock contains duplicate package pins"
+    assert len(pins) >= 20, f"requirements.lock should pin the transitive set too, got {len(pins)}"
 
 
 def test_build_info_covers_identity_and_materials_whitelist(tmp_path: Path):
