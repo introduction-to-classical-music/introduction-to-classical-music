@@ -17,11 +17,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: introduction-to-classical-music/introduction-to-classical-music
-          # TEMPORARY: the PROTOCOL.md version fix currently lives only on
-          # `fix/remediation-batch1-soft` (default branches still say 1.0.0).
-          # After that branch is merged, remove this `ref` so the workflow
-          # follows the default branch (main/dev) again.
-          ref: fix/remediation-batch1-soft
+          # `main` is the release line; `dev` is the integration branch and
+          # carries the current fixes, including the PROTOCOL.md 0.1.0 health
+          # example consumed via RRS_PROTOCOL_PATH below.
+          ref: dev
           path: parent
           fetch-depth: 1
       - uses: actions/setup-python@v5
