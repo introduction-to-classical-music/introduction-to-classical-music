@@ -23,14 +23,18 @@
 
 ## 目录说明
 
+- [0.1.1-acceptance.md](0.1.1-acceptance.md)
+  0.1.1 补救批次验收记录（条件性通过；含安装验证/Pages provenance/默认库与安装种子核对）
 - [0.1.1-release-notes.md](0.1.1-release-notes.md)
   当前版本的变更
 - [0.1.1-installation-guide.md](0.1.1-installation-guide.md)
   当前版本的安装说明
+- [2026-09-16-manual-pre-release-test.md](2026-09-16-manual-pre-release-test.md)
+  人工复测手册（版本期望已更新到 0.1.1）
 - [0.1.0-pre-release-checklist.md](0.1.0-pre-release-checklist.md)
   历史 `v0.1.0` 检查项
 - [0.1.0-installation-guide.md](0.1.0-installation-guide.md)
-  安装、升级、卸载与常见说明
+  历史版本安装说明（含升级、卸载与历史 AppData 路径）
 - [0.1.0-release-notes.md](0.1.0-release-notes.md)
   历史版本的公开发布说明
 - [0.1.0-package-manifest.md](0.1.0-package-manifest.md)
