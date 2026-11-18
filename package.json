@@ -1,8 +1,10 @@
 {
   "name": "buquanshu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Windows-first desktop edition for building, maintaining, and browsing local classical music libraries.",
-  "author": "Introduction to Classical Music Contributors",
+  "author": {
+    "name": "Introduction to Classical Music Contributors"
+  },
   "private": false,
   "build": {
     "executableName": "不全书",
@@ -21,7 +23,14 @@
       "materials/**/*",
       "output/runtime/**/*",
       "output/site/**/*",
-      "node_modules/astro/templates/**/*"
+      "node_modules/astro/templates/**/*",
+      "!**/*.map",
+      "!**/*.d.ts",
+      "!**/tests/**",
+      "!**/test/**",
+      "!**/docs/**",
+      "!**/coverage/**",
+      "!**/.cache/**"
     ],
     "extraResources": [
       {
@@ -36,13 +45,13 @@
     "afterPack": "scripts/electron-after-pack.mjs",
     "win": {
       "icon": "apps/desktop/assets/app-icon.ico",
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "target": [
         "nsis"
       ]
     },
     "nsis": {
-      "artifactName": "不全书 Setup ${version}.${ext}",
+      "artifactName": "buquanshu-setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
@@ -59,7 +68,14 @@
       "output/runtime/apps/owner/**/*",
       "output/runtime/packages/**/*",
       "output/runtime/scripts/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!**/*.map",
+      "!**/*.d.ts",
+      "!**/tests/**",
+      "!**/test/**",
+      "!**/docs/**",
+      "!**/coverage/**",
+      "!**/.cache/**"
     ]
   },
   "main": "output/runtime/apps/desktop/main.js",
@@ -101,24 +117,46 @@
     "desktop:dist": "node scripts/clean-desktop-release.mjs && npm run build && npm run retrieval:portable:build && electron-builder --win nsis --publish never && node scripts/patch-release-icons.mjs",
     "desktop:dist:release": "node scripts/clean-desktop-release.mjs && npm run build && npm run retrieval:portable:build && electron-builder --win nsis --publish always && node scripts/patch-release-icons.mjs",
     "desktop:portable:build": "node scripts/clean-portable-release.mjs && npm run build && node scripts/build-portable-release.mjs",
-    "package:windows": "npm run doctor:windows && npm run desktop:dist",
+    "package:windows": "npm run doctor:windows && npm run desktop:dist && npm run audit:release && npm run release:checksums",
     "astro:check": "node --max-old-space-size=8192 node_modules/astro/astro.js check --root apps/site",
     "check": "npm run assets:prepare && npm run audit:text && npm run audit:secrets && npm run entity-vitals:audit && npm run reference:audit && npm run audit:gate-self-test && npm run astro:check && vitest run",
     "check:long-paths": "node scripts/check-long-paths.mjs",
     "check:long-paths:workspace": "node scripts/check-long-paths.mjs --repo . --repo ../../library/Salon_library --repo ../../site-deploy/introduction-to-classical-music-site-deploy --repo tools/recording-retrieval-service/app --warn-only --max-report 15",
-    "runtime:build": "tsc -p tsconfig.runtime.json"
+    "runtime:build": "tsc -p tsconfig.runtime.json",
+    "generate:exceptions": "node scripts/generate-dependency-exceptions.mjs",
+    "generate:sbom": "node scripts/generate-sbom.mjs",
+    "audit:release": "node scripts/audit-release-artifact.mjs",
+    "release:checksums": "node scripts/write-release-checksums.mjs",
+    "verify:signing": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-signing.ps1"
   },
   "dependencies": {
     "@types/markdown-it": "^14.1.2",
     "@types/sanitize-html": "^2.16.1",
     "adm-zip": "^0.6.1",
-    "astro": "^5.18.1",
+    "astro": "6.4.8",
     "cheerio": "^1.2.0",
-    "express": "^5.2.1",
+    "express": "5.3.0",
     "iconv-lite": "^0.7.2",
-    "markdown-it": "^14.1.1",
-    "sanitize-html": "^2.17.3",
-    "zod": "^4.3.6"
+    "markdown-it": "15.0.3",
+    "sanitize-html": "2.18.2",
+    "zod": "4.6.7"
+  },
+  "overrides": {
+    "devalue": "5.9.4",
+    "esbuild": "0.28.2",
+    "picomatch": "4.0.7",
+    "smol-toml": "1.9.1",
+    "tinyglobby": "0.2.17",
+    "undici": "8.12.4"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/introduction-to-classical-music/introduction-to-classical-music.git"
+  },
+  "homepage": "https://github.com/introduction-to-classical-music/introduction-to-classical-music",
+  "bugs": {
+    "url": "https://github.com/introduction-to-classical-music/introduction-to-classical-music/issues"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.8",
@@ -130,23 +168,5 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.4"
-  },
-  "overrides": {
-    "@astrojs/language-server": "2.16.6",
-    "defu": "6.1.7",
-    "devalue": "5.7.1",
-    "h3": "1.15.11",
-    "lodash": "4.18.1",
-    "path-to-regexp": "8.4.2",
-    "picomatch": "4.0.4",
-    "anymatch": {
-      "picomatch": "2.3.2"
-    },
-    "smol-toml": "1.6.1",
-    "undici": "7.24.8",
-    "vite": "6.4.2",
-    "volar-service-yaml": "0.0.70",
-    "yaml": "2.8.3",
-    "yaml-language-server": "1.22.0"
   }
 }

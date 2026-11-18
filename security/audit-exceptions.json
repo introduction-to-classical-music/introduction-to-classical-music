@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "release-audit-allowlist-v1",
+  "reviewedAt": "2026-11-18",
+  "owner": "E-SOFT/security",
+  "reReviewBy": "2026-12-31",
+  "entries": [
+    {
+      "id": "GHSA-26w7-cxv4-gfx2",
+      "package": "astro",
+      "severity": "critical",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-2883-xcg3-v3hh",
+      "package": "js-yaml",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-2p49-hgcm-8545",
+      "package": "svgo",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-376h-93r7-7g6f",
+      "package": "astro",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-4g3v-8h47-v7g6",
+      "package": "astro",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-4vpr-x523-8j87",
+      "package": "svgo",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-52cp-r559-cp3m",
+      "package": "js-yaml",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-5p4m-2wfm-xmqj",
+      "package": "js-yaml",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-7pw4-f3q4-r2p2",
+      "package": "astro",
+      "severity": "low",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-98hj-9722-w3j8",
+      "package": "astro",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-f48w-9m4c-m7f5",
+      "package": "astro",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-f88m-g3jw-g9cj",
+      "package": "sharp",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-h67p-54hq-rp68",
+      "package": "js-yaml",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-mh32-jxcr-mh9f",
+      "package": "astro",
+      "severity": "low",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-r3h5-4585-7x3w",
+      "package": "astro",
+      "severity": "moderate",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-rgj7-g3m4-5g8c",
+      "package": "sharp",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-w27v-7q3p-w38r",
+      "package": "svgo",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    },
+    {
+      "id": "GHSA-wq5f-xc86-pv6w",
+      "package": "sharp",
+      "severity": "high",
+      "reason": "Reachability evidence in security/DEPENDENCY-EXCEPTIONS.md",
+      "reviewBy": "2026-12-31"
+    }
+  ]
+}

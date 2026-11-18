@@ -174,3 +174,7 @@ npm run package:windows
 - 第三方依赖声明：见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 本项目不会在公共仓库中附带来源不明或版权不清晰的音视频文件、封面图或开发者个人内容包。
+
+## 0.1.2 发布候选（2026-11-18）
+
+0.1.2 为安全加固候选版本，正式 Release 仅在具有有效 Authenticode 签名时发布；当前无证书产物仅用于候选/内部验收。下载资产命名以 `buquanshu-setup-0.1.2.exe` 为准，依赖例外见 `security/DEPENDENCY-EXCEPTIONS.md`。

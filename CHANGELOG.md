@@ -42,3 +42,13 @@
 ### Notes
 
 - 首发版本不提供应用内自动更新
+
+## [0.1.2] - 2026-11-18 (release candidate)
+
+### Security
+- LLM API keys at rest use Windows DPAPI (desktop settings + RRS `llm.local.json`); owner UI no longer persists keys; GET/POST never return recoverable keys.
+- Electron sandbox enabled; owner/local-site CSP and security headers; log/error redaction; RRS job TTL/body limits/AppData logs; default-library screenshot absolute path removed.
+- Dependency upgrades + documented high/critical exception policy (`security/DEPENDENCY-EXCEPTIONS.md`), SBOM/third-party notices, release artifact audit gate, signing/checksum pipeline.
+
+### Release engineering
+- Version 0.1.2; Apache-2.0 license/repository metadata; ASCII `artifactName`; narrowed asar packaging (maps/.d.ts/tests/docs excluded, runtime TS kept); `npm run audit:release`, SBOM generation, signing/checksum scripts.

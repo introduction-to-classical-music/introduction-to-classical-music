@@ -64,3 +64,9 @@
 - 提交前运行 `npm run audit:secrets`；`npm run check` 与 CI `verify` job 会执行同一检查，命中即失败。
 - 若扫描命中：工作树、暂存区与历史都要检查；真实凭据须先轮换/作废，再清理提交，不要仅从工作树删除。
 - 发布/打包前确认便携包材料清单与白名单一致（`build-portable.ps1` 已自动校验）。
+
+## 0.1.2 依赖例外与密钥加固（2026-11-18）
+
+- LLM 密钥使用 Windows DPAPI（CurrentUser）落盘；旧明文自动迁移；无 plaintext fallback。
+- 残余 high/critical 依赖公告按 `security/DEPENDENCY-EXCEPTIONS.md` 逐条可达性登记（astro/js-yaml/picomatch/sharp/svgo 等），allowlist 位于 `security/audit-exceptions.json`，复审到期 2026-12-31；`npm run audit:release` 对 allowlist 外项阻断。
+- 正式 Release 必须有效 Authenticode 签名；无证书只能产出候选。
