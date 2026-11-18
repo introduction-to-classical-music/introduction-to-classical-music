@@ -18,6 +18,9 @@
 
 ### 1. Windows 安装版
 
+> 代码签名：本项目正在申请 SignPath Foundation 免费开源代码签名。获批后，后续 Windows 发布资产将使用 SignPath Foundation 证书签名；当前公开的 `0.1.1` 仍是未签名版本。Free code signing provided by SignPath.io, certificate by SignPath Foundation (application in progress).
+
+
 适合绝大多数普通用户。
 
 - 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `buquanshu-setup-0.1.1.exe`（当前公开版本；0.1.2 候选尚未发布）
