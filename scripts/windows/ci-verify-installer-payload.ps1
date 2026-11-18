@@ -13,6 +13,9 @@ $app = Join-Path $temp "不全书.exe"
 if (-not (Test-Path -LiteralPath $app)) { throw "app executable missing in installer payload" }
 $asar = Join-Path $temp "resources\app.asar"
 if (-not (Test-Path -LiteralPath $asar)) { throw "app.asar missing in installer payload" }
+$appInfo = (Get-Item -LiteralPath $app).VersionInfo
+if ([string]$appInfo.ProductName -ne "不全书") { throw "app ProductName mismatch: $($appInfo.ProductName)" }
+if ([string]$appInfo.ProductVersion -ne "0.1.2") { throw "app ProductVersion mismatch: $($appInfo.ProductVersion)" }
 $metaPath = Join-Path $temp "library\build\site\.icm-build-meta.json"
 if (-not (Test-Path -LiteralPath $metaPath)) { throw "seed meta missing in installer payload" }
 $meta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json
