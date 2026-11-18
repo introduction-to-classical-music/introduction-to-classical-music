@@ -32,6 +32,8 @@
 | RRS 打包 | `npm run retrieval:portable:build` + `assert-portable-bundle.ps1` | 仅 5 个白名单 materials 文件；无 `LLM config.txt`/`*.local.json`/密钥 |
 | 长路径/私密路径 | `npm run check:long-paths` | tracked 路径未超过阈值；`public:audit` 同时拒绝 `materials/archive`、`tools/OwnerLauncher`、`data/automation`（除 `.gitkeep`）被跟踪 |
 
+- 公开 manifest（`site-release-manifest.json`）仅包含：`libraryId`/`libraryName`/`appVersion`/`builtAt`/`siteBase`/`siteOutputMode`/`strippedLocalLinks`/`sourceLocalResourceLinks`/`sourceDigest`/`siteDigest`；不含用户数据、密钥、本机路径或联系方式。
+
 发布记录需附上述命令的日志或摘要；PR 使用 [.github/pull_request_template.md](../../.github/pull_request_template.md) 的公开边界检查项。
 
 ## 4. 边界被破坏时的处置

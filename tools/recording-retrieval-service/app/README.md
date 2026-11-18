@@ -2,6 +2,8 @@
 
 本目录承载独立工具 `Recording Retrieval Service`，中文名统一为“版本自动检索工具”。
 
+> 历史披露：公开软件仓库/RRS 历史中仍含已轮换/作废的旧 LLM key（D2-A 不重写历史），详见父仓库 `SECURITY.md`；当前树/打包产物不含该文件。
+
 它同时服务两种入口：
 
 - `Contract Surface`（合同面）：供父项目 owner 通过本地 HTTP 协议调用。

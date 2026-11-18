@@ -45,8 +45,9 @@
 ## 用户密钥与私密信息隔离策略
 
 - 用户凭据/私密信息与软件本体分离保存：运行时配置位于用户 AppData 下的本地配置（如 `retrieval-service/config/llm.local.json`），不进入仓库、不进入便携包、不进入日志与错误消息。
-- 旧版本地路径 `materials/source-profiles/LLM config.txt` 仅作为历史迁移来源，已被打包白名单排除；仓库内该文件为占位文本，任何情况下不得写入真实密钥。
+- 旧版本地路径 `materials/source-profiles/LLM config.txt` 在当前树已删除（仅历史/已作废旧密钥可见），并被打包白名单排除；任何情况下不得再写入真实密钥。
 - 本机测试/演示使用的密钥不得写入任何仓库文件、测试夹具或导出物；示例配置只使用占位符（如 `YOUR_...`）。
+- 2026-11-18 复审后：LLM 配置 GET/POST 响应只返回 `hasApiKey`/掩码，不回传原始 key；密钥仍以本地配置文件形式落盘（DPAPI/凭据管理器加固列后续，见 C-F07 残余）。
 - 双防线：打包输入以 `packaging/materials-whitelist.json` 为唯一允许清单；仓库内容由 `scripts/audit-secrets.mjs` 扫描。两者都不以“构建后删除”作为唯一保护。
 
 ## 本地服务面与 Electron 残余风险（W3，2026-11-17）
