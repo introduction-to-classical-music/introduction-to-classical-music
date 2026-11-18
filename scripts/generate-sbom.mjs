@@ -20,9 +20,20 @@ for (const [key, meta] of Object.entries(root)) {
 packages.sort((a, b) => a.name.localeCompare(b.name));
 const invalid = packages.filter((pkg) => !ALLOWED.has(pkg.license));
 const generatedAt = new Date().toISOString();
+const pkgVersion = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8")).version;
+const electronVersion = (root["node_modules/electron"] || {}).version || "unknown";
+let rrsVersion = "unknown";
+try {
+  const versionText = await readFile(path.join(repoRoot, "tools", "recording-retrieval-service", "app", "app", "version.py"), "utf8");
+  let match = versionText.match(/APP_VERSION\s*=\s*["']([^"']+)/);
+  if (!match) match = versionText.match(/__version__\s*=\s*["']([^"']+)/);
+  if (match) rrsVersion = match[1];
+} catch {}
+
 const sbom = [
   "# SBOM（生产依赖）",
   "",
+  `- 应用：buquanshu ${pkgVersion}；Electron ${electronVersion}；RRS ${rrsVersion}`,
   `- 生成时间：${generatedAt}`,
   `- 生成方式：读取 package-lock.json（排除 dev/optional），并校验许可证 allowlist`,
   `- 生产依赖数：${packages.length}`,

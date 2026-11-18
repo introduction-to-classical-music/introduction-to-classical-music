@@ -50,7 +50,7 @@
 ## 0.1.2 发布 gate（必须）
 
 1. `npm run generate:exceptions && npm run generate:sbom`（lock 变更时）并确认 allowlist/许可证。
-2. 从干净提交构建：`npm run desktop:dist`；随后 `npm run audit:release`（allowlist 外 high/critical fail；绝对路径/PII/密钥/源映射/版本/latest.yml 检查）。
+2. 从干净提交构建候选：`npm run desktop:dist`（默认 `signAndEditExecutable=false`，产出 unsigned 候选）；正式签名构建使用 `npm run desktop:dist:signed` 并设置 `CSC_LINK`/`CSC_KEY_PASSWORD`；随后 `npm run audit:release`（allowlist 外 high/critical fail；绝对路径/PII/密钥/源映射/版本/latest.yml 检查）。
 3. `npm run verify:signing -- -InstallerPath <installer> -RequireSigned`：正式 Release 必须 Authenticode Valid；无证书只能产出 **候选**，tag 发布必须被 CI gate 阻止。
 4. `npm run release:checksums` 生成 SHA256SUMS.txt/checksums.json；安装包/latest.yml/README 命名需一致（ASCII `buquanshu-setup-<version>.exe`）。
 5. 证据与例外复审：`security/DEPENDENCY-EXCEPTIONS.md` 到期前复审；安装/升级/卸载/GUI 验收另由 E-VERIFY 执行。

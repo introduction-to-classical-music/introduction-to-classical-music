@@ -1,6 +1,7 @@
 # SBOM（生产依赖）
 
-- 生成时间：2026-11-18T04:35:34.772Z
+- 应用：buquanshu 0.1.2；Electron 41.2.1；RRS 0.1.0
+- 生成时间：2026-11-18T05:32:00.886Z
 - 生成方式：读取 package-lock.json（排除 dev/optional），并校验许可证 allowlist
 - 生产依赖数：352
 

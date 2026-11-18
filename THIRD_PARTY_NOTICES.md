@@ -1,6 +1,6 @@
 # 第三方软件声明
 
-本文件由 `node scripts/generate-sbom.mjs` 生成（2026-11-18T04:35:34.772Z），列出生产依赖及其许可证。
+本文件由 `node scripts/generate-sbom.mjs` 生成（2026-11-18T05:32:00.886Z），列出生产依赖及其许可证。
 许可证 allowlist：0BSD、Apache-2.0、BSD-2/3-Clause、CC0/CC-BY、ISC、MIT、Unlicense、Zlib、MPL-2.0 等。
 
 | 包 | 版本 | 许可证 | 仓库/来源 |
