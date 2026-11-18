@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { getRuntimePaths } from "./app-paths.js";
@@ -62,7 +62,23 @@ async function runAstroBuild(options: { outputDir?: string; siteBase?: string } 
   const astroCliPath = path.resolve(path.dirname(astroPackagePath), astroBinRelativePath);
   const astroRootDir = path.join(runtimePaths.repoRoot, "apps", "site");
   const astroCwd = resolveRuntimeWorkingDirectory(runtimePaths.repoRoot);
-  await writeBuildRuntimeLog(`runAstroBuild: spawn ${process.execPath} ${astroCliPath} --root ${astroRootDir} cwd=${astroCwd}`);
+  // Astro 6 may rename build artifacts between its prerender cache and the
+  // output directory. Windows rejects rename across volumes (EXDEV), so build
+  // into a staging directory on the repository drive and copy to the requested
+  // destination (tests often use a temp dir on another drive).
+  const requestedOutputDir = options.outputDir ? path.resolve(options.outputDir) : env.ICM_SITE_OUT_DIR;
+  if (!requestedOutputDir) {
+    throw new Error("Astro build output directory is not configured");
+  }
+  const stagingDir = path.join(
+    runtimePaths.repoRoot,
+    "output",
+    `.site-build-staging-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  await rm(stagingDir, { recursive: true, force: true });
+  await mkdir(stagingDir, { recursive: true });
+  env.ICM_SITE_OUT_DIR = stagingDir;
+  await writeBuildRuntimeLog(`runAstroBuild: spawn ${process.execPath} ${astroCliPath} --root ${astroRootDir} cwd=${astroCwd} staging=${stagingDir}`);
   const child = spawn(process.execPath, [astroCliPath, "build", "--root", path.join(runtimePaths.repoRoot, "apps", "site")], {
     cwd: astroCwd,
     env,
@@ -84,11 +100,16 @@ async function runAstroBuild(options: { outputDir?: string; siteBase?: string } 
   const [code] = await once(child, "exit");
   await writeBuildRuntimeLog(`runAstroBuild: exit code=${String(code)}`);
   if (code !== 0) {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
     const diagnostic = stderrTail.trim();
     throw new Error(
       `Astro build failed with exit code ${code}${diagnostic ? `: ${diagnostic}` : " (no stderr captured)"}`,
     );
   }
+  await rm(requestedOutputDir, { recursive: true, force: true });
+  await mkdir(path.dirname(requestedOutputDir), { recursive: true });
+  await cp(stagingDir, requestedOutputDir, { recursive: true });
+  await rm(stagingDir, { recursive: true, force: true });
 }
 
 /**
