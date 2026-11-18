@@ -16,8 +16,8 @@
 
 Free code signing provided by SignPath.io, certificate by SignPath Foundation (application in progress).
 
-- Committers / reviewers: [@Hektor1277](https://github.com/Hektor1277)
-- Approvers: [@Hektor1277](https://github.com/Hektor1277)
+- Committers / reviewers: [@Hektor1277](https://github.com/Hektor1277), [@z1645444](https://github.com/z1645444)
+- Approvers: [@Hektor1277](https://github.com/Hektor1277), [@z1645444](https://github.com/z1645444)
 - Full policy: [CODE-SIGNING-POLICY.md](CODE-SIGNING-POLICY.md)
 - Privacy policy: [PRIVACY.md](PRIVACY.md)
 
