@@ -99,3 +99,14 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm run desktop:dist:release
+      - name: Verify Authenticode signature (official release gate)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem output/releases/buquanshu-setup-*.exe | Select-Object -First 1
+          if (-not $installer) { throw "installer not found" }
+          ./scripts/verify-release-signing.ps1 -InstallerPath $installer.FullName -RequireSigned
+      - name: Installer install smoke (signed release)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem output/releases/buquanshu-setup-*.exe | Select-Object -First 1
+          ./scripts/windows/ci-install-smoke.ps1 -InstallerPath $installer.FullName
