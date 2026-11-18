@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { setSecretProtectorForTests } from "../../packages/automation/src/secret-protector.ts";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { once } from "node:events";
@@ -66,6 +67,13 @@ function sessionCookieFrom(response: RawResponse) {
   }
   return session.split(";")[0];
 }
+
+beforeAll(() => {
+  setSecretProtectorForTests({
+    protect: async (plaintext) => Buffer.from(String(plaintext), "utf8").toString("base64"),
+    unprotect: async (ciphertext) => Buffer.from(String(ciphertext), "base64").toString("utf8"),
+  });
+});
 
 beforeAll(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "classical-owner-hardening-"));
@@ -352,4 +360,8 @@ describe("owner API hardening (W3)", () => {
     expect(nonEmptyPayload.needsOverwrite).toBe(true);
     expect(existsSync(path.join(nonEmptyDir, "old.html"))).toBe(true);
   });
+});
+
+afterAll(() => {
+  setSecretProtectorForTests(null);
 });
