@@ -17,19 +17,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: introduction-to-classical-music/introduction-to-classical-music
-          # `main` is the release line; `dev` is the integration branch and
-          # carries the current fixes, including the PROTOCOL.md 0.1.0 health
-          # example consumed via RRS_PROTOCOL_PATH below.
-          ref: dev
+          # Pin the parent checkout so CI cannot silently move with `dev`.
+          # Update this SHA when the RRS protocol/data fixture intentionally
+          # changes; the release checklist records the new SHA.
+          ref: c5bc2752dff59e6d532b3ef27172aacf21a6812f
           path: parent
           fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install package and dev dependencies
+      - name: Install hash-locked dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+          python -m pip check
       - name: Compile check
         run: python -m compileall -q app
       - name: Verify parent workspace fixture is available

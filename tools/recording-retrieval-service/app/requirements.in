@@ -1,9 +1,9 @@
 # Direct runtime dependencies (ranges mirror pyproject.toml).
 #
-# `requirements.lock` is the real pinned set generated with
-# `python -m pip freeze --exclude-editable` from the verified offline Windows
-# build virtualenv (see the lock header). This file stays range-based for
-# editable installs / CI `pip install -e ".[dev]"`.
+# `requirements.lock` is the hash-locked pinned set generated with
+# `pip-compile --generate-hashes --allow-unsafe` from the verified Windows
+# environment (see the lock header). This file stays range-based for editable
+# installs; CI installs the lock with `--require-hashes`.
 fastapi>=0.115,<1.0
 httpx>=0.28,<1.0
 playwright>=1.58,<2.0

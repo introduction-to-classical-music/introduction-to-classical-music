@@ -79,11 +79,12 @@ def test_protocol_path_resolution_env_and_fallbacks(monkeypatch, tmp_path: Path)
     assert _resolve_protocol_path(app_root) == app_root / "PROTOCOL.md"
 
 
-def test_requirements_lock_is_a_real_pip_freeze_with_key_pins():
+def test_requirements_lock_is_hash_locked_with_key_pins():
     lock_text = (APP_ROOT / "requirements.lock").read_text(encoding="utf-8")
-    # Real lock generated from the verified offline build virtualenv (W8 build);
-    # it must not regress to the earlier BLOCKED/DRAFT placeholder.
-    assert "python -m pip freeze --exclude-editable" in lock_text
+    # Hash-locked dependency set generated from the verified W8 environment.
+    # It must not regress to a placeholder or an unhashed hand-written list.
+    assert "pip-compile" in lock_text or "pip freeze" in lock_text
+    assert "--hash=sha256:" in lock_text
     assert "BLOCKED" not in lock_text
     assert "DRAFT" not in lock_text
     for package in ("fastapi", "httpx", "playwright", "pydantic", "uvicorn", "pyinstaller", "pytest"):

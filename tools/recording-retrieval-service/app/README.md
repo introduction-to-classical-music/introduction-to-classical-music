@@ -112,7 +112,7 @@ tools/recording-retrieval-service/
 ## 版本、依赖与构建追溯
 
 - 版本单一来源：`app/version.py` 的 `APP_VERSION`；`pyproject.toml` 通过 `dynamic = ["version"]` 读取，`/health` 与 `PROTOCOL.md` 示例一致（由 `tests/test_build_info.py` 断言）。
-- 依赖：`requirements.in` 记录直接依赖范围；`requirements.lock` 是由已验证离线构建 venv 通过 `python -m pip freeze --exclude-editable` 生成的**真实精确 pin**（含传递依赖，无 hashes；生成环境与验证结果写在文件头注释，重新生成方法见注释）。
+- 依赖：`requirements.in` 记录直接依赖范围；`requirements.lock` 是从已验证 Windows/Python 3.13.5 环境生成的 **hash-locked 精确 pin**（含传递依赖与 SHA256；用 `pip install --require-hashes -r requirements.lock` 安装，生成/校验命令见文件头注释）。
 - 内嵌仓库为可追溯的干净提交：父仓库 `tools/recording-retrieval-service/app/**` 快照与内嵌仓库 HEAD 对齐（见父仓库 `docs/` 与 remediation 证据）。
 - 离线回归：`.github/workflows/ci.yml` 在安装 `[dev]` 依赖后运行 `python -m compileall -q app` 与 `python -m pytest -m "not network" -q`；真实平台测试应标记 `@pytest.mark.network`（标记已在 `pyproject.toml` 声明）。
 - 本地凭据：`config/*.local.json`、旧路径 `materials/source-profiles/LLM config.txt` 已在 `.gitignore` 排除，禁止提交。
