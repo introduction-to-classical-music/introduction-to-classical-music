@@ -9,15 +9,15 @@ from app.services import llm_client
 
 def test_legacy_plaintext_is_migrated_to_dpapi_envelope(tmp_path) -> None:
     path = tmp_path / "llm.local.json"
-    path.write_text('{"enabled": true, "fastModel": {"apiKey": "sk-legacy"}}', encoding="utf-8")
+    path.write_text('{"enabled": true, "fastModel": {"apiKey": "test-legacy-key"}}', encoding="utf-8")
 
     payload, migrated = llm_client._read_secret_payload(path)
     assert migrated is True
-    assert payload["fastModel"]["apiKey"] == "sk-legacy"
+    assert payload["fastModel"]["apiKey"] == "test-legacy-key"
     text = path.read_text(encoding="utf-8")
     assert text.startswith("{")
     assert '"schemaVersion": "dpapi-v1"' in text
-    assert "sk-legacy" not in text
+    assert "test-legacy-key" not in text
 
 
 def test_decrypt_failure_fails_closed(tmp_path, monkeypatch) -> None:
@@ -33,11 +33,11 @@ def test_decrypt_failure_fails_closed(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows DPAPI only")
 def test_windows_dpapi_roundtrip_uses_current_user_scope(tmp_path) -> None:
-    payload = {"enabled": True, "fastModel": {"apiKey": "sk-dpapi-roundtrip"}}
+    payload = {"enabled": True, "fastModel": {"apiKey": "test-dpapi-key"}}
     path = tmp_path / "llm.local.json"
     llm_client._write_secret_payload(path, payload)
     text = path.read_text(encoding="utf-8")
-    assert "sk-dpapi-roundtrip" not in text
+    assert "test-dpapi-key" not in text
     restored, migrated = llm_client._read_secret_payload(path)
     assert migrated is False
     assert restored == payload

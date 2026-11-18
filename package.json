@@ -30,7 +30,11 @@
       "!**/test/**",
       "!**/docs/**",
       "!**/coverage/**",
-      "!**/.cache/**"
+      "!**/.cache/**",
+      "!**/*.test.*",
+      "!**/*.spec.*",
+      "!**/__snapshots__/**",
+      "!**/node_modules/**/*.ts"
     ],
     "extraResources": [
       {
@@ -75,7 +79,11 @@
       "!**/test/**",
       "!**/docs/**",
       "!**/coverage/**",
-      "!**/.cache/**"
+      "!**/.cache/**",
+      "!**/*.test.*",
+      "!**/*.spec.*",
+      "!**/__snapshots__/**",
+      "!**/node_modules/**/*.ts"
     ]
   },
   "main": "output/runtime/apps/desktop/main.js",

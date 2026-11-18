@@ -61,6 +61,12 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm run package:windows
+      - name: Installer smoke test (silent install/uninstall)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem output/releases/buquanshu-setup-*.exe | Select-Object -First 1
+          if (-not $installer) { throw "installer not found" }
+          ./scripts/windows/ci-install-smoke.ps1 -InstallerPath $installer.FullName
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
