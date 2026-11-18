@@ -15,11 +15,14 @@ export type RemoteImageGuardOptions = {
   resolveHostAddresses?: (hostname: string) => Promise<string[]>;
   maxBytes?: number;
   timeoutMs?: number;
+  maxRedirects?: number;
   allowedContentTypes?: string[];
 };
 
 export const DEFAULT_REMOTE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const DEFAULT_REMOTE_IMAGE_TIMEOUT_MS = 15000;
+export const DEFAULT_REMOTE_IMAGE_MAX_REDIRECTS = 5;
+export const REDIRECT_STATUS_CODES = [301, 302, 303, 307, 308] as const;
 export const DEFAULT_REMOTE_IMAGE_CONTENT_TYPES = [
   "image/png",
   "image/jpeg",
@@ -225,60 +228,99 @@ export async function fetchRemoteImage(
   const fetchImpl = options.fetchImpl || fetch;
   const maxBytes = Number(options.maxBytes ?? DEFAULT_REMOTE_IMAGE_MAX_BYTES);
   const timeoutMs = Number(options.timeoutMs ?? DEFAULT_REMOTE_IMAGE_TIMEOUT_MS);
+  const maxRedirects = Math.max(0, Number(options.maxRedirects ?? DEFAULT_REMOTE_IMAGE_MAX_REDIRECTS));
+  const redirectStatuses = new Set<number>(REDIRECT_STATUS_CODES);
   const allowedContentTypes = new Set(
     (options.allowedContentTypes || DEFAULT_REMOTE_IMAGE_CONTENT_TYPES).map((type) => type.toLowerCase()),
   );
 
-  const { url } = await assertRemoteImageUrlAllowed(urlInput, options);
-  const response = await fetchImpl(url, {
-    redirect: "follow",
-    headers: { Accept: "image/*,*/*;q=0.8" },
-    signal: AbortSignal.timeout(Math.max(1000, timeoutMs)),
-  });
+  // C-F06: follow redirects manually so every hop is SSRF-validated before the
+  // next request is issued (redirect:"follow" would connect to a private host
+  // first and only validate the final URL afterwards).
+  let currentUrl = (await assertRemoteImageUrlAllowed(urlInput, options)).url;
+  for (let redirectCount = 0; ; redirectCount += 1) {
+    const response = await fetchImpl(currentUrl, {
+      redirect: "manual",
+      headers: { Accept: "image/*,*/*;q=0.8" },
+      signal: AbortSignal.timeout(Math.max(1000, timeoutMs)),
+    });
 
-  // Redirects may land on a private address; validate the final URL again.
-  if (response.url && response.url !== url.href) {
-    await assertRemoteImageUrlAllowed(response.url, options);
-  }
-  if (!response.ok) {
-    throw new Error(`Remote image request failed: ${response.status}`);
-  }
-
-  const rawContentType = String(response.headers.get("content-type") || "").toLowerCase();
-  const contentType = rawContentType.split(";")[0].trim();
-  if (!allowedContentTypes.has(contentType)) {
-    throw new Error(`Unsupported remote image content type: ${contentType || "unknown"}`);
-  }
-  const declaredLength = Number(response.headers.get("content-length") || 0);
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    throw new Error("Remote image is too large");
-  }
-
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
-  if (response.body) {
-    const reader = response.body.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+    if (redirectStatuses.has(response.status)) {
+      await response.body?.cancel().catch(() => {});
+      if (redirectCount >= maxRedirects) {
+        throw new Error(`Too many remote image redirects (max ${maxRedirects})`);
       }
-      const chunk = Buffer.from(value);
-      totalBytes += chunk.byteLength;
-      if (totalBytes > maxBytes) {
-        await reader.cancel().catch(() => {});
-        throw new Error("Remote image is too large");
+      const location = response.headers.get("location");
+      if (!location) {
+        throw new Error("Remote image redirect is missing a Location header");
       }
-      chunks.push(chunk);
+      let nextUrl: URL;
+      try {
+        nextUrl = new URL(location, currentUrl);
+      } catch {
+        throw new Error("Remote image redirect has an invalid Location");
+      }
+      // Validate the next hop (protocol/credentials/DNS/private ranges) BEFORE
+      // issuing any network request to it.
+      await assertRemoteImageUrlAllowed(nextUrl.href, options);
+      currentUrl = nextUrl;
+      continue;
     }
-  } else {
-    const buffer = Buffer.from(await response.arrayBuffer());
-    totalBytes = buffer.byteLength;
-    if (totalBytes > maxBytes) {
+
+    // Defensive re-check for custom fetch implementations that still follow
+    // redirects internally and expose a different final URL.
+    if (response.url) {
+      let responseUrl: URL | null = null;
+      try {
+        responseUrl = new URL(response.url);
+      } catch {
+        responseUrl = null;
+      }
+      if (responseUrl && responseUrl.href !== currentUrl.href) {
+        await assertRemoteImageUrlAllowed(responseUrl.href, options);
+        currentUrl = responseUrl;
+      }
+    }
+    if (!response.ok) {
+      throw new Error(`Remote image request failed: ${response.status}`);
+    }
+
+    const rawContentType = String(response.headers.get("content-type") || "").toLowerCase();
+    const contentType = rawContentType.split(";")[0].trim();
+    if (!allowedContentTypes.has(contentType)) {
+      throw new Error(`Unsupported remote image content type: ${contentType || "unknown"}`);
+    }
+    const declaredLength = Number(response.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
       throw new Error("Remote image is too large");
     }
-    chunks.push(buffer);
-  }
 
-  return { bytes: Buffer.concat(chunks), contentType, finalUrl: response.url || url.href };
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    if (response.body) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        const chunk = Buffer.from(value);
+        totalBytes += chunk.byteLength;
+        if (totalBytes > maxBytes) {
+          await reader.cancel().catch(() => {});
+          throw new Error("Remote image is too large");
+        }
+        chunks.push(chunk);
+      }
+    } else {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      totalBytes = buffer.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new Error("Remote image is too large");
+      }
+      chunks.push(buffer);
+    }
+
+    return { bytes: Buffer.concat(chunks), contentType, finalUrl: currentUrl.href };
+  }
 }

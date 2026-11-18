@@ -138,8 +138,11 @@ def build_build_info(
             bundle_dir,
             exclude=(BUILD_INFO_FILE_NAME, ".build-info.json"),
         )
+        # C-F02: never record the build machine's absolute bundle path. The
+        # directory name plus the content digest identifies the bundle without
+        # leaking local workspace layout.
         info["bundle"] = {
-            "path": str(bundle_dir),
+            "name": bundle_dir.resolve().name,
             "digest": bundle_info["digest"],
             "fileCount": bundle_info["fileCount"],
         }

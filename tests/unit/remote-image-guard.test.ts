@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { once } from "node:events";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 
 import {
   assertRemoteImageUrlAllowed,
@@ -132,5 +135,105 @@ describe("remote image fetch guard (W3)", () => {
       }),
     ).rejects.toThrow(/not allowed/);
     expect(fetched).toBe(false);
+  });
+
+  it("does not issue a second request for a redirect to a private host (C-F06)", async () => {
+    // A real loopback listener counts connections: a blind follow would connect.
+    let connections = 0;
+    const listener = http.createServer((_request, response) => {
+      connections += 1;
+      response.end("private");
+    });
+    listener.on("connection", () => {
+      connections += 1;
+    });
+    listener.listen(0, "127.0.0.1");
+    await once(listener, "listening");
+    const privatePort = (listener.address() as AddressInfo).port;
+    const requestedUrls: string[] = [];
+    try {
+      await expect(
+        fetchRemoteImage("https://images.example.test/redirect.png", {
+          resolveHostAddresses: async () => ["93.184.216.34"],
+          fetchImpl: async (input) => {
+            requestedUrls.push(String(input));
+            return new Response(null, {
+              status: 302,
+              headers: { location: `http://127.0.0.1:${privatePort}/internal.png` },
+            });
+          },
+        }),
+      ).rejects.toThrow(/not allowed/);
+      expect(requestedUrls).toHaveLength(1);
+      expect(connections).toBe(0);
+    } finally {
+      await new Promise<void>((resolve) => listener.close(() => resolve()));
+    }
+  });
+
+  it("follows validated public redirects manually and exposes the final URL", async () => {
+    const requestedUrls: string[] = [];
+    const redirectModes: Array<string | undefined> = [];
+    const result = await fetchRemoteImage("https://images.example.test/redirect.png", {
+      resolveHostAddresses: async () => ["93.184.216.34"],
+      fetchImpl: async (input, init) => {
+        requestedUrls.push(String(input));
+        redirectModes.push(init?.redirect);
+        if (requestedUrls.length === 1) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: "https://cdn.example.test/final.png" },
+          });
+        }
+        return new Response(pngBytes, { status: 200, headers: { "content-type": "image/png" } });
+      },
+    });
+    expect(requestedUrls).toEqual([
+      "https://images.example.test/redirect.png",
+      "https://cdn.example.test/final.png",
+    ]);
+    expect(redirectModes).toEqual(["manual", "manual"]);
+    expect(result.finalUrl).toBe("https://cdn.example.test/final.png");
+    expect([...result.bytes]).toEqual([...pngBytes]);
+  });
+
+  it("rejects redirect chains longer than the configured limit", async () => {
+    let requests = 0;
+    await expect(
+      fetchRemoteImage("https://images.example.test/loop.png", {
+        resolveHostAddresses: async () => ["93.184.216.34"],
+        fetchImpl: async () => {
+          requests += 1;
+          return new Response(null, {
+            status: 302,
+            headers: { location: `https://images.example.test/hop-${requests}.png` },
+          });
+        },
+      }),
+    ).rejects.toThrow(/Too many remote image redirects \(max 5\)/);
+    expect(requests).toBe(6);
+  });
+
+  it("rejects redirects without Location, with invalid Location, or with non-http(s) targets", async () => {
+    await expect(
+      fetchRemoteImage("https://images.example.test/missing.png", {
+        resolveHostAddresses: async () => ["93.184.216.34"],
+        fetchImpl: async () => new Response(null, { status: 302 }),
+      }),
+    ).rejects.toThrow(/missing a Location/);
+
+    await expect(
+      fetchRemoteImage("https://images.example.test/invalid.png", {
+        resolveHostAddresses: async () => ["93.184.216.34"],
+        fetchImpl: async () => new Response(null, { status: 302, headers: { location: "http://[::bad" } }),
+      }),
+    ).rejects.toThrow(/invalid Location/);
+
+    await expect(
+      fetchRemoteImage("https://images.example.test/file.png", {
+        resolveHostAddresses: async () => ["93.184.216.34"],
+        fetchImpl: async () => new Response(null, { status: 302, headers: { location: "file:///etc/passwd" } }),
+      }),
+    ).rejects.toThrow(/Unsupported image protocol/);
   });
 });

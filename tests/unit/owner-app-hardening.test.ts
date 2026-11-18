@@ -194,6 +194,36 @@ describe("owner API hardening (W3)", () => {
     expect(unauthenticated.status).toBe(401);
   });
 
+  it("rejects case-variant /API paths without a session (C-F01)", async () => {
+    // Express route matching is case-insensitive; the session gate must be too.
+    for (const pathname of [
+      "/API/remote-image?url=https%3A%2F%2Fx.test%2Fa.png",
+      "/Api/remote-image?url=https%3A%2F%2Fx.test%2Fa.png",
+      "/aPI/remote-image?url=https%3A%2F%2Fx.test%2Fa.png",
+      "/api/remote-image?url=https%3A%2F%2Fx.test%2Fa.png",
+    ]) {
+      const response = await rawRequest({ path: pathname, withCookie: false });
+      expect(response.status, pathname).toBe(401);
+    }
+
+    // Side-effect endpoints must also be blocked in mixed/upper case.
+    for (const pathname of ["/API/library/import", "/Api/open-resource", "/aPI/assets/upload"]) {
+      const response = await rawRequest({
+        method: "POST",
+        path: pathname,
+        withCookie: false,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(response.status, pathname).toBe(401);
+    }
+  });
+
+  it("does not expose a case-variant route to authenticated clients (defense in depth)", async () => {
+    const upper = await rawRequest({ path: "/API/remote-image?url=https%3A%2F%2Fx.test%2Fa.png" });
+    expect(upper.status).toBe(404);
+  });
+
   it("blocks remote-image requests to private hosts and non-image responses", async () => {
     const privateHost = await rawRequest({
       path: `/api/remote-image?url=${encodeURIComponent("http://internal.example.test/x.png")}`,
@@ -271,6 +301,25 @@ describe("owner API hardening (W3)", () => {
     });
     expect(unsupportedExternal.status).toBe(400);
     expect(unsupportedExternal.body).toContain("Unsupported url protocol");
+  });
+
+  it("does not return the raw LLM API key from config GET/POST (C-F07)", async () => {
+    const saved = await jsonRequest("/api/automation/llm/config", {
+      enabled: true,
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "secret-llm-key",
+      model: "test-model",
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body).not.toContain("secret-llm-key");
+
+    const loaded = await rawRequest({ path: "/api/automation/llm/config" });
+    expect(loaded.status).toBe(200);
+    expect(loaded.body).not.toContain("secret-llm-key");
+    const payload = JSON.parse(loaded.body);
+    expect(payload.config.apiKey).toBe("");
+    expect(payload.config.hasApiKey).toBe(true);
+    expect(payload.config.apiKeyMasked).toBe("********");
   });
 
   it("protects the site export destination (root path / non-empty directory)", async () => {

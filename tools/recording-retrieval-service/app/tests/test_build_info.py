@@ -112,6 +112,12 @@ def test_build_info_covers_identity_and_materials_whitelist(tmp_path: Path):
     assert info["materialsWhitelistSha256"]
     assert info["requirementsLockSha256"]
     assert info["bundle"]["fileCount"] == 2  # build-info.json itself is excluded from the digest
+    # C-F02: the bundle location must not leak the build machine's absolute path.
+    assert "path" not in info["bundle"]
+    assert info["bundle"]["name"] == bundle_dir.name
+    serialized = json.dumps(info)
+    assert str(bundle_dir) not in serialized
+    assert "path" not in info["bundle"]
     assert "git" in info and "commit" in info["git"]
 
     info_path = write_build_info(tmp_path / "release" / "build-info.json", info)

@@ -100,6 +100,11 @@ import { loadReferenceRegistry } from "../../../packages/data-core/src/reference
 import { loadLibraryFromBundleRoot, mergeLibraries } from "../../../packages/data-core/src/library-merge.js";
 
 const app = express();
+// Defense in depth for C-F01: Express matches routes case-insensitively by
+// default, while the session gate below used to compare a case-sensitive path
+// prefix. Keep route matching case-sensitive as well so case variants cannot
+// reach a side-effect handler even if a future refactor weakens the gate.
+app.set("case sensitive routing", true);
 const port = Number(process.env.OWNER_PORT || 4322);
 const runtimePaths = getRuntimePaths();
 const ownerDir = runtimePaths.ownerWebDir;
@@ -222,7 +227,10 @@ app.use((request, response, next) => {
     return;
   }
 
-  if (request.path.startsWith("/api/")) {
+  // C-F01: Express route matching is case-insensitive, so the authentication
+  // gate must be case-insensitive too (e.g. /API/... must not bypass /api/...).
+  const normalizedPath = request.path.toLowerCase();
+  if (normalizedPath === "/api" || normalizedPath.startsWith("/api/")) {
     const cookies = parseCookieHeader(request.headers.cookie);
     if (!safeTokenEquals(cookies[security.sessionCookieName] || "", security.sessionToken)) {
       response.status(401).json({ error: "Owner session required" });
