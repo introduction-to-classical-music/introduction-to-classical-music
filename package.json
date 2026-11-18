@@ -127,7 +127,7 @@
     "desktop:dist:release": "node scripts/clean-desktop-release.mjs && npm run build && npm run retrieval:portable:build && electron-builder --win nsis --publish always --config.win.signAndEditExecutable=true && node scripts/patch-release-icons.mjs",
     "desktop:portable:build": "node scripts/clean-portable-release.mjs && npm run build && node scripts/build-portable-release.mjs",
     "package:windows": "npm run doctor:windows && npm run desktop:dist && npm run audit:release && npm run release:checksums",
-    "astro:check": "node --max-old-space-size=8192 node_modules/astro/astro.js check --root apps/site",
+    "astro:check": "node --max-old-space-size=8192 node_modules/astro/bin/astro.mjs check --root apps/site",
     "check": "npm run assets:prepare && npm run audit:text && npm run audit:secrets && npm run entity-vitals:audit && npm run reference:audit && npm run audit:gate-self-test && npm run astro:check && vitest run",
     "check:long-paths": "node scripts/check-long-paths.mjs",
     "check:long-paths:workspace": "node scripts/check-long-paths.mjs --repo . --repo ../../library/Salon_library --repo ../../site-deploy/introduction-to-classical-music-site-deploy --repo tools/recording-retrieval-service/app --warn-only --max-report 15",
