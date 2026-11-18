@@ -98,7 +98,9 @@ jobs:
       - run: npm run doctor:windows
       - run: npm run check
       - run: npm run build
-      - run: npm run desktop:dist:release
+      # Build the signed installer WITHOUT publishing. Gate order matters:
+      # build -> signature/install smoke -> audit/checksums -> publish.
+      - run: npm run desktop:dist:signed
       - name: Verify Authenticode signature (official release gate)
         shell: pwsh
         run: |
@@ -110,3 +112,18 @@ jobs:
         run: |
           $installer = Get-ChildItem output/releases/buquanshu-setup-*.exe | Select-Object -First 1
           ./scripts/windows/ci-install-smoke.ps1 -InstallerPath $installer.FullName
+      - name: Release audit and checksums
+        shell: pwsh
+        run: |
+          npm run audit:release
+          npm run release:checksums
+      - name: Publish GitHub Release (after all gates)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $existing = gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create $tag --generate-notes --verify-tag }
+          $assets = @(Get-ChildItem output/releases/buquanshu-setup-*.exe, output/releases/*.blockmap, output/releases/latest.yml)
+          gh release upload $tag @($assets.FullName) --clobber
