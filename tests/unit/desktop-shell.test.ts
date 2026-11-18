@@ -15,7 +15,7 @@ describe("desktop shell scaffolding", () => {
     expect(packageJson.scripts["desktop:dist"]).toContain("npm run build");
     expect(packageJson.scripts["desktop:dist"]).toContain("retrieval:portable:build");
     expect(packageJson.scripts["desktop:dist"]).toContain("clean-desktop-release.mjs");
-    expect(packageJson.scripts["desktop:dist"]).toContain("patch-release-icons.mjs");
+    expect(packageJson.build?.afterPack).toBe("scripts/electron-after-pack.mjs");
     expect(packageJson.scripts["retrieval:portable:build"]).toContain("build-portable.ps1");
     expect(packageJson.build?.extraResources?.[0]?.from).toBe("tools/recording-retrieval-service/app/dist/portable");
     expect(packageJson.build?.files).toContain("data/**/*");
