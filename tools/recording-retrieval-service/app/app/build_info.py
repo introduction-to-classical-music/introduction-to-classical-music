@@ -100,6 +100,24 @@ def _git(app_root: Path, args: list[str]) -> str | None:
 
 
 def read_git_state(app_root: Path) -> dict:
+    # Parent repository checkouts do not contain the nested RRS .git directory
+    # (it is not tracked by the parent). In that case use the tracked snapshot
+    # identity file so release artifacts still record the embedded RRS commit.
+    if not (app_root / ".git").exists():
+        identity_file = app_root.parent / "RRS-COMMIT.txt"
+        if identity_file.is_file():
+            identity: dict[str, str] = {}
+            for line in identity_file.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    identity[key.strip()] = value.strip()
+            if identity.get("commit"):
+                return {
+                    "commit": identity["commit"],
+                    "branch": identity.get("branch", "snapshot"),
+                    "worktreeClean": True,
+                    "source": "RRS-COMMIT.txt",
+                }
     commit = _git(app_root, ["rev-parse", "HEAD"])
     status = _git(app_root, ["status", "--porcelain"])
     branch = _git(app_root, ["rev-parse", "--abbrev-ref", "HEAD"])
@@ -107,6 +125,7 @@ def read_git_state(app_root: Path) -> dict:
         "commit": commit or "unknown",
         "branch": branch or "unknown",
         "worktreeClean": None if status is None else status == "",
+        "source": "git",
     }
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.build_info import BUILD_INFO_SCHEMA_VERSION, build_build_info, hash_directory, write_build_info
+from app.build_info import BUILD_INFO_SCHEMA_VERSION, build_build_info, hash_directory, read_git_state, write_build_info
 from app.version import APP_VERSION
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -140,3 +140,16 @@ def test_hash_directory_is_deterministic(tmp_path: Path):
 def test_build_info_schema_is_json_serializable():
     info = build_build_info(app_root=APP_ROOT)
     json.dumps(info)
+
+
+def test_snapshot_identity_file_is_used_when_nested_git_is_absent(tmp_path: Path) -> None:
+    app_root = tmp_path / "app"
+    app_root.mkdir()
+    (app_root / "app").mkdir()
+    (app_root / "app" / "version.py").write_text('APP_VERSION = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "RRS-COMMIT.txt").write_text("commit=abc123\nbranch=snapshot-test\n", encoding="utf-8")
+    state = read_git_state(app_root)
+    assert state["commit"] == "abc123"
+    assert state["branch"] == "snapshot-test"
+    assert state["worktreeClean"] is True
+    assert state["source"] == "RRS-COMMIT.txt"
