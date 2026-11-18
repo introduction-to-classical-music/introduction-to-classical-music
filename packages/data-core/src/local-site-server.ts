@@ -61,6 +61,20 @@ export function createLocalSiteServer(options: {
 
       const port = await findAvailablePort(preferredPort);
       const app = express();
+      // Release S5: security headers for the local site. Astro pages use inline
+      // styles and inline module scripts, so the CSP allows those but forbids
+      // framing, objects and cross-origin subresources; no eval is allowed.
+      app.use((_request, response, next) => {
+        response.setHeader(
+          "Content-Security-Policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        );
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Referrer-Policy", "no-referrer");
+        response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+        response.setHeader("X-Frame-Options", "DENY");
+        next();
+      });
       // W3/D3-A: the old `/__local-resource` endpoint (which opened arbitrary
       // paths on GET, a same-origin side effect) is intentionally gone. Local
       // resource links are opened by the Electron IPC bridge instead; in a

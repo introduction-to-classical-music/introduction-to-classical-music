@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { getRuntimePaths, resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
 import { isAllowedExternalTarget } from "../../packages/data-core/src/open-target.js";
+import { redactSensitiveText } from "../../packages/shared/src/redact.js";
 import { needsSiteRebuild } from "../../packages/data-core/src/site-rebuild.js";
 
 type ManagedService = {
@@ -437,7 +438,9 @@ function createWindow(options: Electron.BrowserWindowConstructorOptions) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // Release S4: renderer processes are sandboxed; preload must only use
+      // the minimal contextBridge/ipcRenderer API exposed below.
+      sandbox: true,
       webSecurity: true,
       preload: desktopPreloadPath,
     },
@@ -538,7 +541,7 @@ async function openPortableLibrarySite() {
   return site.url;
 }
 
-async function ensureOwnerService() {
+async function ensureOwnerService(options: { retrievalServiceUrl?: string } = {}) {
   writeDesktopLog("ensureOwnerService: begin");
   await ensureDesktopRuntimeReady();
   if (ownerService) {
@@ -562,6 +565,7 @@ async function ensureOwnerService() {
       LIBRARY_SITE_PORT: "4331",
       ICM_ACTIVE_LIBRARY_DIR: summary.rootDir,
       ICM_OWNER_BOOTSTRAP_TOKEN: bootstrapToken,
+      ...(options.retrievalServiceUrl ? { RECORDING_RETRIEVAL_SERVICE_URL: options.retrievalServiceUrl } : {}),
     }),
     stdio: "ignore",
     windowsHide: true,
@@ -575,7 +579,16 @@ async function ensureOwnerService() {
 }
 
 async function openOwnerTool() {
-  const service = await ensureOwnerService();
+  // S9/F20: opening the maintenance tool also ensures the retrieval service is
+  // up and passes its actual URL to the owner server.
+  let retrievalServiceUrl: string | undefined;
+  try {
+    const retrieval = await ensureRetrievalService();
+    retrievalServiceUrl = retrieval.url;
+  } catch (error) {
+    writeDesktopLog("openOwnerTool: retrieval service unavailable, using configured fallback", error);
+  }
+  const service = await ensureOwnerService({ retrievalServiceUrl });
   const bootstrapUrl = ownerBootstrapUrl(service);
   if (ownerWindow && !ownerWindow.isDestroyed()) {
     ownerWindow.focus();

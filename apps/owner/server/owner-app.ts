@@ -189,12 +189,33 @@ function createOwnerSecurityConfig(overrides = {}) {
   };
 }
 
+const OWNER_SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "X-Frame-Options": "DENY",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
+function applyOwnerSecurityHeaders(response: import("express").Response) {
+  for (const [name, value] of Object.entries(OWNER_SECURITY_HEADERS)) {
+    response.setHeader(name, value);
+  }
+}
+
 function getOwnerSecurityConfig() {
   if (!app.locals.ownerSecurity) {
     app.locals.ownerSecurity = createOwnerSecurityConfig({});
   }
   return app.locals.ownerSecurity;
 }
+
+app.use((request, response, next) => {
+  applyOwnerSecurityHeaders(response);
+  next();
+});
 
 app.use((request, response, next) => {
   const security = getOwnerSecurityConfig();

@@ -253,7 +253,16 @@ const normalizeEntityActionButtons = () => {
   });
 };
 
-const llmDraftStorageKey = "owner.llm.apiKey";
+// C-F07 / release S2: the LLM API key must never be persisted in the owner
+// browser UI. Keep an in-memory draft only and remove any legacy localStorage
+// value left by older builds.
+const legacyLlmApiKeyStorageKey = "owner.llm.apiKey";
+let llmApiKeyDraft = "";
+try {
+  window.localStorage.removeItem(legacyLlmApiKeyStorageKey);
+} catch {
+  // ignore local storage failures in local owner tool
+}
 const collapsedPanelStoragePrefix = "owner.collapsed";
 const proposalDraftStoragePrefix = "owner.reviewDraft";
 const artistRoles = ["soloist", "singer", "ensemble", "chorus", "instrumentalist"];
@@ -4496,24 +4505,11 @@ const refreshSite = async () => {
   fillSiteForm(site);
 };
 
-const readStoredLlmApiKey = () => {
-  try {
-    return window.localStorage.getItem(llmDraftStorageKey) || "";
-  } catch {
-    return "";
-  }
-};
+const readStoredLlmApiKey = () => llmApiKeyDraft;
 
 const rememberLlmApiKey = (value) => {
-  const normalized = compact(value);
-  try {
-    if (normalized) {
-      window.localStorage.setItem(llmDraftStorageKey, normalized);
-    }
-  } catch {
-    // ignore local storage failures in local owner tool
-  }
-  return normalized;
+  llmApiKeyDraft = compact(value);
+  return llmApiKeyDraft;
 };
 
 const getProposalDraftStateKey = (runId, proposalId) => `${compact(runId)}::${compact(proposalId)}`;

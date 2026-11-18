@@ -60,6 +60,13 @@ describe("local site server", () => {
 
     expect(response.ok).toBe(true);
     expect(html).toContain("<title>Library</title>");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-frame-options")).toBe("DENY");
+    const csp = response.headers.get("content-security-policy") || "";
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).not.toContain("unsafe-eval");
   });
 
   it("no longer exposes a same-origin side-effect endpoint for local paths", async () => {

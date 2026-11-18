@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { normalizeAutomationRun, type AutomationRun, type AutomationSnapshot } from "./automation.js";
 import { defaultLlmConfig, mergeLlmConfigPatch, type LlmConfig } from "./llm.js";
+import { isSecretEnvelope, protectSecret, unprotectSecret } from "./secret-protector.js";
 import type { RecordingRetrievalProviderStatus } from "./recording-retrieval.js";
 import { getRuntimePaths } from "../../data-core/src/app-paths.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "../../data-core/src/atomic-file.js";
@@ -170,18 +171,33 @@ export function findRunSnapshot(run: AutomationRun, snapshotId: string): Automat
 export async function loadLlmConfig() {
   await ensureAutomationDirs();
   const settingsPath = getRuntimePaths().appData.secretsPath;
+  let content: string;
   try {
-    const content = stripUtf8Bom(await fs.readFile(settingsPath, "utf8"));
-    return mergeLlmConfigPatch(defaultLlmConfig, JSON.parse(content) as Partial<LlmConfig>);
+    content = stripUtf8Bom(await fs.readFile(settingsPath, "utf8"));
   } catch {
     return defaultLlmConfig;
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("LLM secret file is corrupted (invalid JSON); refusing plaintext fallback");
+  }
+  if (isSecretEnvelope(parsed)) {
+    const plaintext = await unprotectSecret(parsed);
+    return mergeLlmConfigPatch(defaultLlmConfig, JSON.parse(plaintext) as Partial<LlmConfig>);
+  }
+  // Legacy plaintext file: migrate it to DPAPI before returning the config.
+  const legacyConfig = mergeLlmConfigPatch(defaultLlmConfig, (parsed || {}) as Partial<LlmConfig>);
+  await saveLlmConfig(legacyConfig);
+  return legacyConfig;
 }
 
 export async function saveLlmConfig(config: LlmConfig) {
   await ensureAutomationDirs();
   const settingsPath = getRuntimePaths().appData.secretsPath;
-  await writeJsonFileAtomic(settingsPath, config);
+  const envelope = await protectSecret(JSON.stringify(config));
+  await writeJsonFileAtomic(settingsPath, envelope);
   return config;
 }
 

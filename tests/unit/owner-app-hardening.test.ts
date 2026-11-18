@@ -192,6 +192,13 @@ describe("owner API hardening (W3)", () => {
   it("requires a session before reaching hardened routes", async () => {
     const unauthenticated = await rawRequest({ path: "/api/remote-image?url=https://x.test/a.png", withCookie: false });
     expect(unauthenticated.status).toBe(401);
+    expect(unauthenticated.headers["x-content-type-options"]).toBe("nosniff");
+    expect(unauthenticated.headers["x-frame-options"]).toBe("DENY");
+    expect(unauthenticated.headers["referrer-policy"]).toBe("no-referrer");
+    const csp = String(unauthenticated.headers["content-security-policy"] || "");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).not.toContain("unsafe-eval");
   });
 
   it("rejects case-variant /API paths without a session (C-F01)", async () => {
