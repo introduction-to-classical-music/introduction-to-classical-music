@@ -12,6 +12,17 @@
 
 默认安装后附带的是**空资料库模板**，只包含《不全书使用手册》，不包含测试条目或开发者个人资料。
 
+## Code signing policy / 代码签名政策
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation (application in progress).
+
+- Committers / reviewers: [@Hektor1277](https://github.com/Hektor1277)
+- Approvers: [@Hektor1277](https://github.com/Hektor1277)
+- Full policy: [CODE-SIGNING-POLICY.md](CODE-SIGNING-POLICY.md)
+- Privacy policy: [PRIVACY.md](PRIVACY.md)
+
+本项目正在申请 SignPath Foundation 免费开源代码签名；获批后后续 Windows 发布资产将使用 SignPath Foundation 证书签名，当前公开的 `0.1.1` 仍是未签名版本。
+
 ## 当前发布内容
 
 当前公开发布包含三类内容：
