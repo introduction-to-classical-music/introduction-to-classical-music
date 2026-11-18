@@ -1,7 +1,11 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as ResEdit from "resedit";
+
+const require = createRequire(import.meta.url);
+const { version: appVersion } = require("../package.json");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +53,37 @@ async function patchExecutableIcon(executablePath, iconData) {
   await writeFile(executablePath, Buffer.from(exe.generate()));
 }
 
+async function patchExecutableVersion(executablePath) {
+  const executableData = await readFile(executablePath);
+  const exe = ResEdit.NtExecutable.from(executableData);
+  const resources = ResEdit.NtExecutableResource.from(exe);
+  const versionInfoList = ResEdit.Resource.VersionInfo.fromEntries(resources.entries);
+  if (versionInfoList.length === 0) {
+    throw new Error(`No version info resource found in ${executablePath}`);
+  }
+  const versionInfo = versionInfoList[0];
+  const languages = versionInfo.getAllLanguagesForStringValues();
+  const language = languages[0]?.lang ?? 1033;
+  versionInfo.setFileVersion(appVersion, language);
+  versionInfo.setProductVersion(appVersion, language);
+  versionInfo.setStringValues(
+    { lang: language, codepage: 1200 },
+    {
+      FileDescription: "Windows-first desktop edition for building, maintaining, and browsing local classical music libraries.",
+      ProductName: "不全书",
+      ProductVersion: appVersion,
+      FileVersion: appVersion,
+      CompanyName: "Introduction to Classical Music Contributors",
+      LegalCopyright: "Copyright © 2026 Introduction to Classical Music Contributors",
+      OriginalFilename: path.basename(executablePath),
+      InternalName: "buquanshu",
+    },
+  );
+  versionInfo.outputToResourceEntries(resources.entries);
+  resources.outputResource(exe);
+  await writeFile(executablePath, Buffer.from(exe.generate()));
+}
+
 async function main() {
   const iconData = await readFile(iconPath);
   const candidateExecutables = await resolveCandidateExecutables();
@@ -60,6 +95,7 @@ async function main() {
     }
 
     await patchExecutableIcon(executablePath, iconData);
+    await patchExecutableVersion(executablePath);
     patched.push(path.relative(repoRoot, executablePath));
   }
 
