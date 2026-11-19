@@ -20,7 +20,7 @@ jobs:
           # Pin the parent checkout so CI cannot silently move with `dev`.
           # Update this SHA when the RRS protocol/data fixture intentionally
           # changes; the release checklist records the new SHA.
-          ref: c5bc2752dff59e6d532b3ef27172aacf21a6812f
+          ref: d7f3595d99b659f979904838a5050cc9bcdfdad7
           path: parent
           fetch-depth: 1
       - uses: actions/setup-python@v5
