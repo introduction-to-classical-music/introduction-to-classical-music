@@ -14,6 +14,22 @@ import { normalizeResourceLink } from "./resource-links.js";
  *   2. a file inside the active library directory (its own assets/content).
  * Everything else is rejected before any shell/external program is invoked.
  */
+// C-F13: never hand executable/script-like targets to the OS opener. This is a
+// fail-closed policy; the user can still open such files from the file manager.
+export const DENIED_LOCAL_RESOURCE_EXTENSIONS = new Set([
+  ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".msi", ".scr", ".lnk", ".url",
+  ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".reg", ".cpl", ".dll",
+  ".jar", ".sh", ".bash", ".zsh", ".py", ".pyw", ".rb", ".pl", ".php", ".app",
+]);
+
+export function denyReasonForLocalResourceExtension(target: string): string {
+  const extension = path.extname(compact(target)).toLowerCase();
+  if (DENIED_LOCAL_RESOURCE_EXTENSIONS.has(extension)) {
+    return "出于安全原因，不通过应用打开可执行文件或脚本；请使用系统文件管理器打开该文件";
+  }
+  return "";
+}
+
 export type LocalResourceAccessOptions = {
   libraryRootDir: string;
   assetsDirs?: string[];
@@ -94,10 +110,44 @@ export async function resolveAllowedLocalResourceTarget(
   if (!trimmed) {
     throw new Error("Missing local resource path");
   }
+  const deniedReason = denyReasonForLocalResourceExtension(trimmed);
+  if (deniedReason) {
+    throw new Error(deniedReason);
+  }
   if (!isAllowedLocalResourcePath(trimmed, options)) {
     throw new Error("Local resource path is not registered in the active library");
   }
   const resolvedTarget = path.resolve(trimmed);
   await fs.access(resolvedTarget);
-  return resolvedTarget;
+  // realpath both sides so a symlink inside an allowed root cannot escape it.
+  let realTarget: string;
+  try {
+    realTarget = await fs.realpath(resolvedTarget);
+  } catch {
+    throw new Error("Local resource path could not be resolved");
+  }
+  const registered = (options.registeredLocalPaths || []).map((value) => compact(value)).filter(Boolean);
+  for (const registeredPath of registered) {
+    const resolvedRegistered = path.resolve(registeredPath);
+    if (resolvedRegistered !== resolvedTarget) continue;
+    if (!(await fs.stat(resolvedRegistered)).isFile()) {
+      throw new Error("Registered local resource is not a file");
+    }
+    return resolvedTarget;
+  }
+  const allowedRoots = [options.libraryRootDir, ...(options.assetsDirs || []), ...(options.contentDirs || [])]
+    .map((value) => compact(value))
+    .filter(Boolean);
+  for (const root of allowedRoots) {
+    let realRoot: string;
+    try {
+      realRoot = await fs.realpath(path.resolve(root));
+    } catch {
+      continue;
+    }
+    if (isPathWithin(realRoot, realTarget)) {
+      return resolvedTarget;
+    }
+  }
+  throw new Error("Local resource path is not registered in the active library");
 }

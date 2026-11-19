@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -176,5 +176,52 @@ describe("local resource access policy (W3)", () => {
     await expect(
       resolveAllowedLocalResourceTarget(path.join(root, "outside.flac"), options),
     ).rejects.toThrow(/not registered in the active library/);
+  });
+});
+
+describe("local resource executable/realpath hardening (C-F13)", () => {
+  it("rejects executable/script extensions even inside an allowed root", async () => {
+    const root = await createTempRoot();
+    const libraryRoot = path.join(root, "library");
+    await mkdir(libraryRoot, { recursive: true });
+    for (const name of ["tool.exe", "run.cmd", "hook.ps1", "link.lnk", "script.js", "setup.msi"]) {
+      const target = path.join(libraryRoot, name);
+      await writeFile(target, "x", "utf8");
+      await expect(resolveAllowedLocalResourceTarget(target, { libraryRootDir: libraryRoot })).rejects.toThrow(
+        /可执行文件或脚本/,
+      );
+    }
+  });
+
+  it("allows ordinary images/PDFs inside the allowed root", async () => {
+    const root = await createTempRoot();
+    const libraryRoot = path.join(root, "library");
+    await mkdir(libraryRoot, { recursive: true });
+    for (const name of ["cover.jpg", "score.pdf"]) {
+      const target = path.join(libraryRoot, name);
+      await writeFile(target, "x", "utf8");
+      await expect(resolveAllowedLocalResourceTarget(target, { libraryRootDir: libraryRoot })).resolves.toBe(
+        path.resolve(target),
+      );
+    }
+  });
+
+  it("rejects symlink escapes out of the allowed root (when symlinks are available)", async () => {
+    const root = await createTempRoot();
+    const libraryRoot = path.join(root, "library");
+    const outsideDir = path.join(root, "outside");
+    await mkdir(libraryRoot, { recursive: true });
+    await mkdir(outsideDir, { recursive: true });
+    const outsideFile = path.join(outsideDir, "secret.mp3");
+    await writeFile(outsideFile, "audio", "utf8");
+    const linkPath = path.join(libraryRoot, "escape.mp3");
+    try {
+      await symlink(outsideFile, linkPath, "file");
+    } catch {
+      return; // Windows without symlink privilege: covered by realpath logic review
+    }
+    await expect(resolveAllowedLocalResourceTarget(linkPath, { libraryRootDir: libraryRoot })).rejects.toThrow(
+      /not registered/,
+    );
   });
 });

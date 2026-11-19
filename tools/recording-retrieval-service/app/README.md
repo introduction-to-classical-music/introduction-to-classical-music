@@ -164,3 +164,18 @@ RRS CI 会 checkout 公开父仓库到 `parent/` 并设置 `RRS_WORKSPACE_ROOT=$
 - 不直接写入 owner 的 `AutomationRun`
 - 不直接维护候选审查状态
 - 不直接解析批量导入模板文本
+
+## 平台搜索 fallback 语义（C-F14）
+
+`platform-search.local.json` 的 `bilibili.enabled` 同时门控 Bilibili API 与 Bilibili 的 browser search/page fallback：关闭后不会发起任何 Bilibili 浏览器请求（仍保留其他平台的既有行为）；`youtube`/`appleMusic` 的 `enabled` 语义不变。
+
+## 手动网络测试（C-F11）
+
+默认离线 CI 使用 `pytest -m "not network"`；网络测试为显式 opt-in：
+
+```powershell
+$env:RRS_NETWORK_TEST_BASE_URL = "http://127.0.0.1:4780"
+.venv\Scripts\python -m pytest -m network -q
+```
+
+未设置 `RRS_NETWORK_TEST_BASE_URL` 时网络测试会 skip；`--collect-only -m network` 应收集到 1 项。

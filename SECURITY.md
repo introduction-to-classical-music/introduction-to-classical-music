@@ -70,3 +70,7 @@
 - LLM 密钥使用 Windows DPAPI（CurrentUser）落盘；旧明文自动迁移；无 plaintext fallback。
 - 残余 high/critical 依赖公告按 `security/DEPENDENCY-EXCEPTIONS.md` 逐条可达性登记（astro/js-yaml/picomatch/sharp/svgo 等），allowlist 位于 `security/audit-exceptions.json`，复审到期 2026-12-31；`npm run audit:release` 对 allowlist 外项阻断。
 - 正式 Release 必须有效 Authenticode 签名；无证书只能产出候选。
+
+## 本地资源打开策略（C-F13，0.1.2）
+
+`desktop:open-local-resource` 只允许打开活动库内/已登记的普通文件；拒绝可执行与脚本类扩展（exe/cmd/ps1/js/msi/lnk 等），并在 `realpath` 后校验不得逃逸允许根（symlink）。被拒绝时请使用系统文件管理器打开。

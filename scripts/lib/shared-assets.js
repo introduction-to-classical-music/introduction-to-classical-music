@@ -136,7 +136,13 @@ export async function restoreLegacyAssetDirectory(rootDir, relativeAssetPath = "
 
   await mkdir(targetPath, { recursive: true });
   const archiveEntries = missingRelativePaths.map((relativePath) => `${LEGACY_ARCHIVE_ROOT}/${relativePath.replace(/\\/g, "/")}`);
-  const result = spawnSync("tar", ["-xf", archivePath, "-C", targetPath, "--strip-components=1", ...archiveEntries], {
+  // C-F15: invoke tar with relative archive/target paths + cwd so GNU tar on
+  // Windows does not interpret drive letters as remote hosts.
+  const archiveCwd = path.dirname(archivePath);
+  const archiveName = path.basename(archivePath);
+  const targetRelative = path.relative(archiveCwd, targetPath).split(path.sep).join("/") || ".";
+  const result = spawnSync("tar", ["-xf", archiveName, "-C", targetRelative, "--strip-components=1", ...archiveEntries], {
+    cwd: archiveCwd,
     stdio: "pipe",
     encoding: "utf8",
   });

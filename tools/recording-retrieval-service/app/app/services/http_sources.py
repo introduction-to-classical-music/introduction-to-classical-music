@@ -641,6 +641,10 @@ class HttpSourceProvider:
             )
         )
 
+    def _can_use_bilibili_browser_fallback(self) -> bool:
+        # C-F14: bilibili.enabled gates both the API path and browser fallbacks.
+        return bool(self._platform_search_config.enabled and self._platform_search_config.bilibili.enabled)
+
     async def inspect_existing_links(self, draft: DraftRecordingEntry, profile: RetrievalProfile) -> list[dict[str, Any]]:
         del profile
         self._reset_warnings()
@@ -1456,7 +1460,20 @@ class HttpSourceProvider:
         sample_url = url_builders[0](queries[0])
         host = urlparse(sample_url).netloc.lower()
         lowered_label = compact(source_label).lower()
-        bilibili_search = "bilibili" in lowered_label
+        bilibili_search = "bilibili" in lowered_label or "bilibili" in host
+        if bilibili_search and not self._can_use_bilibili_browser_fallback():
+            self._warn("Bilibili 浏览器搜索回退已禁用（bilibili.enabled=false）")
+            self._record_access_event(
+                url=sample_url,
+                operation="browser-search",
+                ok=False,
+                duration_ms=0.0,
+                source_kind="streaming",
+                source_label=f"{source_label} Browser Search",
+                query=queries[0],
+                error="bilibili browser search fallback disabled",
+            )
+            return rows
         query_depth = len(queries) if bilibili_search else 1
         result_depth = min(HYDRATE_DEPTH, self._recommended_result_depth(host, STREAMING_RESULT_DEPTH) + 2)
         if bilibili_search:
@@ -2360,6 +2377,9 @@ class HttpSourceProvider:
             browser_metadata_needed = metadata_is_insufficient(title, description, body_text) or youtube_generic_shell or (
                 platform == "bilibili" and (duration_seconds <= 0 or view_count <= 0 or not compact(uploader) or bilibili_suspicious_metadata)
             )
+            if platform == "bilibili" and browser_metadata_needed and not self._can_use_bilibili_browser_fallback():
+                self._warn("Bilibili 页面 browser fallback 已禁用（bilibili.enabled=false）")
+                browser_metadata_needed = False
             if browser_metadata_needed:
                 browser_started = time.perf_counter()
                 try:

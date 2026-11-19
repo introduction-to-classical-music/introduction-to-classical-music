@@ -1,3 +1,3 @@
-commit=4a80a61f8d4a4695bfde9059a4a17d6772f798cb
+commit=e8e71924b2e7b6ca1b09627187992f2518bb1094
 branch=codex/retrieval-pipeline-v1
 snapshot=parent-repository

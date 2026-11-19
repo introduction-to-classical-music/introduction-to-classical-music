@@ -151,10 +151,19 @@ describe("shared assets helpers", () => {
     );
     await writeFile(sourceFile, "legacy-image", "utf8");
 
-    const archiveResult = spawnSync("tar", ["-cf", archivePath, "-C", archiveRoot, "an incomplete guide to classical music"], {
-      stdio: "pipe",
-      encoding: "utf8",
-    });
+    // C-F15: GNU tar on Windows treats absolute drive paths as remote hosts.
+    // Use a relative archive path + cwd so the same command works on Windows
+    // (GNU/bsdtar) and POSIX CI.
+    const archiveCwd = path.dirname(archivePath);
+    const archiveSourceRelative = path.relative(archiveCwd, archiveRoot);
+    const archiveResult = spawnSync(
+      "tar",
+      ["-cf", path.basename(archivePath), "-C", archiveSourceRelative, "an incomplete guide to classical music"],
+      {
+        cwd: archiveCwd,
+        encoding: "utf8",
+      },
+    );
     expect(archiveResult.status).toBe(0);
 
     const restored = await restoreLegacyAssetDirectory(repoRoot);
