@@ -4362,7 +4362,7 @@ def test_provider_uses_browser_rendered_bilibili_results_before_search_engine_fa
         client=client,
         browser_fetcher=browser_fetcher,
         platform_search_config=PlatformSearchConfig(
-            bilibili=BilibiliSearchConfig(enabled=False),
+            bilibili=BilibiliSearchConfig(enabled=True),
         ),
     )
 
@@ -4396,7 +4396,7 @@ def test_provider_accepts_browser_rendered_bilibili_av_links(tmp_path: Path) -> 
         client=client,
         browser_fetcher=browser_fetcher,
         platform_search_config=PlatformSearchConfig(
-            bilibili=BilibiliSearchConfig(enabled=False),
+            bilibili=BilibiliSearchConfig(enabled=True),
         ),
     )
 
@@ -4530,7 +4530,7 @@ def test_fetch_page_record_uses_browser_fallback_for_suspicious_bilibili_metadat
         client=httpx.AsyncClient(transport=SuspiciousBilibiliTransport(), follow_redirects=True),
         browser_fetcher=browser_fetcher,
         platform_search_config=PlatformSearchConfig(
-            bilibili=BilibiliSearchConfig(enabled=False),
+            bilibili=BilibiliSearchConfig(enabled=True),
         ),
     )
     draft = DraftRecordingEntry(
@@ -4613,7 +4613,7 @@ def test_fetch_page_record_does_not_extract_misleading_year_from_suspicious_bili
         client=httpx.AsyncClient(transport=SuspiciousBilibiliYearLeakTransport(), follow_redirects=True),
         browser_fetcher=browser_fetcher,
         platform_search_config=PlatformSearchConfig(
-            bilibili=BilibiliSearchConfig(enabled=False),
+            bilibili=BilibiliSearchConfig(enabled=True),
         ),
     )
     draft = DraftRecordingEntry(

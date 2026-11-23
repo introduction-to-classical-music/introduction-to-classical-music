@@ -172,13 +172,18 @@ export function mergeLlmConfigPatch(current: LlmConfig, patch: Partial<LlmConfig
 }
 
 export function sanitizeLlmConfig(config: LlmConfig) {
+  // C-F07: never return the raw API key to the owner web UI / HTTP clients.
+  // The UI only needs to know whether a key is stored; a blank apiKey means
+  // "keep the existing secret unless the user types a replacement".
+  const hasApiKey = Boolean(String(config.apiKey || "").trim());
   return {
     enabled: config.enabled,
     baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
+    apiKey: "",
+    hasApiKey,
+    apiKeyMasked: hasApiKey ? "********" : "",
     model: config.model,
     timeoutMs: config.timeoutMs,
-    hasApiKey: Boolean(config.apiKey),
   };
 }
 

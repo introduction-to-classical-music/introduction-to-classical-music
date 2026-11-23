@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import ctypes
 import json
 import os
+import sys
 import threading
 import weakref
 from dataclasses import dataclass
@@ -13,6 +15,100 @@ import httpx
 
 from app.services.pipeline import DraftRecordingEntry, RetrievalProfile, SourceRecord
 from app.services.source_profiles import materials_root
+
+# C-F07 / release S2: llm.local.json must never contain plaintext API keys.
+# On Windows the payload is encrypted with DPAPI (CurrentUser) via ctypes; tests
+# inject a fake protector and non-Windows runtimes fail closed (no plaintext
+# fallback).
+_SECRET_SCHEMA_VERSION = "dpapi-v1"
+_secret_protect_hook: Callable[[bytes], bytes] | None = None
+_secret_unprotect_hook: Callable[[bytes], bytes] | None = None
+
+
+def set_secret_protector_for_tests(
+    protect: Callable[[bytes], bytes] | None,
+    unprotect: Callable[[bytes], bytes] | None,
+) -> None:
+    global _secret_protect_hook, _secret_unprotect_hook
+    _secret_protect_hook = protect
+    _secret_unprotect_hook = unprotect
+
+
+class _DataBlob(ctypes.Structure):
+    _fields_ = [("cbData", ctypes.c_ulong), ("pbData", ctypes.POINTER(ctypes.c_byte))]
+
+
+def _dpapi_call(data: bytes, protect: bool) -> bytes:
+    import base64
+    import ctypes
+
+    if sys.platform != "win32":
+        raise RuntimeError("Windows DPAPI is unavailable on this platform; refusing plaintext secret fallback")
+    buffer = ctypes.create_string_buffer(data, len(data))
+    blob_in = _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_byte)))
+    blob_out = _DataBlob()
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+    function = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
+    description = ctypes.c_wchar_p("recording-retrieval-service llm config")
+    if protect:
+        ok = function(ctypes.byref(blob_in), description, None, None, None, 0, ctypes.byref(blob_out))
+    else:
+        ok = function(ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out))
+    if not ok:
+        raise RuntimeError(f"DPAPI {'protect' if protect else 'unprotect'} failed")
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        kernel32.LocalFree(blob_out.pbData)
+    del base64
+
+
+def _protect_secret_bytes(data: bytes) -> bytes:
+    if _secret_protect_hook is not None:
+        return _secret_protect_hook(data)
+    return _dpapi_call(data, True)
+
+
+def _unprotect_secret_bytes(data: bytes) -> bytes:
+    if _secret_unprotect_hook is not None:
+        return _secret_unprotect_hook(data)
+    return _dpapi_call(data, False)
+
+
+def _write_secret_payload(path: Path, payload: dict[str, Any]) -> None:
+    import base64
+
+    plaintext = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    ciphertext = _protect_secret_bytes(plaintext)
+    envelope = {
+        "schemaVersion": _SECRET_SCHEMA_VERSION,
+        "scope": "CurrentUser",
+        "ciphertext": base64.b64encode(ciphertext).decode("ascii"),
+    }
+    path.write_text(json.dumps(envelope, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _read_secret_payload(path: Path) -> tuple[dict[str, Any], bool]:
+    """Return (payload, migrated). Raises on decrypt failure (no plaintext fallback)."""
+    import base64
+
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(document, dict) and document.get("schemaVersion") == _SECRET_SCHEMA_VERSION:
+        ciphertext = base64.b64decode(str(document.get("ciphertext") or ""))
+        try:
+            plaintext = _unprotect_secret_bytes(ciphertext)
+        except Exception as error:  # noqa: BLE001 - explicit fail-closed
+            raise RuntimeError(
+                "Failed to decrypt llm.local.json with Windows DPAPI (refusing plaintext fallback)"
+            ) from error
+        return json.loads(plaintext.decode("utf-8")), False
+    if not isinstance(document, dict):
+        raise RuntimeError("llm.local.json has an unsupported shape")
+    # Legacy plaintext file: re-encrypt immediately, then return it.
+    _write_secret_payload(path, document)
+    return document, True
+
 
 
 @dataclass(slots=True)
@@ -144,7 +240,7 @@ def migrate_legacy_llm_config(legacy_path: Path | None = None, runtime_path: Pat
             "timeoutMs": reasoning.timeout_ms,
         },
     }
-    target_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_secret_payload(target_path, payload)
     return True
 
 
@@ -156,9 +252,10 @@ def ensure_runtime_llm_config(runtime_path: Path | None = None, example_path: Pa
     target_path.parent.mkdir(parents=True, exist_ok=True)
     source_path = example_path or example_llm_config_path()
     if source_path.is_file():
-        target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
     else:
-        target_path.write_text(json.dumps(default_llm_config_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = default_llm_config_payload()
+    _write_secret_payload(target_path, payload)
     return target_path
 
 
@@ -170,7 +267,7 @@ def load_llm_config(path: Path | None = None) -> LlmConfigBundle:
 
     payload: dict[str, Any] = {}
     if config_path.is_file():
-        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        payload, _migrated = _read_secret_payload(config_path)
 
     if "fastModel" in payload or "reasoningModel" in payload:
         fast_payload = dict(payload.get("fastModel") or {})

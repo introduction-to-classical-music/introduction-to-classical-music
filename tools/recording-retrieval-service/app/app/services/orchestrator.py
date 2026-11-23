@@ -31,14 +31,45 @@ class JobRuntime:
     results: ResultsResponse | None = None
     cancel_event: threading.Event = field(default_factory=threading.Event)
     thread: threading.Thread | None = None
+    created_at: float = field(default_factory=time.monotonic)
 
 
 class JobOrchestrator:
-    def __init__(self, log_dir: Path | None = Path("logs"), retriever: StubRetriever | None = None) -> None:
+    def __init__(
+        self,
+        log_dir: Path | None = Path("logs"),
+        retriever: StubRetriever | None = None,
+        *,
+        job_ttl_seconds: float = 1800.0,
+        max_retained_jobs: int = 100,
+    ) -> None:
         self._jobs: dict[str, JobRuntime] = {}
         self._lock = threading.Lock()
         self._logger = SummaryLogger(log_dir)
         self._retriever = retriever or build_default_retriever()
+        self._job_ttl_seconds = max(1.0, float(job_ttl_seconds))
+        self._max_retained_jobs = max(1, int(max_retained_jobs))
+
+    def prune_jobs(self) -> int:
+        """Evict terminal jobs past TTL / above the retention cap (F19)."""
+        removed = 0
+        now = time.monotonic()
+        with self._lock:
+            for job_id, runtime in list(self._jobs.items()):
+                if runtime.status.status in TERMINAL_JOB_STATUSES and now - runtime.created_at > self._job_ttl_seconds:
+                    del self._jobs[job_id]
+                    removed += 1
+            if len(self._jobs) > self._max_retained_jobs:
+                terminal = [
+                    (runtime.created_at, job_id)
+                    for job_id, runtime in self._jobs.items()
+                    if runtime.status.status in TERMINAL_JOB_STATUSES
+                ]
+                terminal.sort()
+                for _created_at, job_id in terminal[: max(0, len(self._jobs) - self._max_retained_jobs)]:
+                    del self._jobs[job_id]
+                    removed += 1
+        return removed
 
     def create_job(self, request: CreateJobRequest) -> AcceptedJobResponse:
         job_id = f"job-{uuid4().hex}"
@@ -54,6 +85,7 @@ class JobOrchestrator:
         runtime = JobRuntime(accepted=accepted, status=status)
         worker = threading.Thread(target=self._run_job, args=(job_id, request), daemon=True)
         runtime.thread = worker
+        self.prune_jobs()
         with self._lock:
             self._jobs[job_id] = runtime
         self._logger.log(job_id, event="accepted", request_id=request.request_id)

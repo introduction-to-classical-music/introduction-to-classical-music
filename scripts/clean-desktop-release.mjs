@@ -14,6 +14,9 @@ const targets = [
   path.join(releasesRoot, `不全书 Setup ${version}.exe`),
   path.join(releasesRoot, `不全书 Setup ${version}.exe.blockmap`),
   path.join(releasesRoot, `不全书 ${version}.exe`),
+  path.join(releasesRoot, `buquanshu-setup-${version}.exe`),
+  path.join(releasesRoot, `buquanshu-setup-${version}.exe.blockmap`),
+  path.join(releasesRoot, `buquanshu-${version}.exe`),
 ];
 
 await Promise.all(targets.map((targetPath) => rm(targetPath, { recursive: true, force: true })));

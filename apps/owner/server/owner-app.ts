@@ -1,6 +1,8 @@
 // @ts-nocheck
 import express from "express";
 import path from "node:path";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { access, readFile as readBinaryFile, cp, mkdir, rm, rename } from "node:fs/promises";
 
 import {
@@ -61,6 +63,7 @@ import {
 import { validateLibrary } from "../../../packages/shared/src/schema.js";
 import { getRuntimePaths } from "../../../packages/data-core/src/app-paths.js";
 import { buildLibrarySite } from "../../../packages/data-core/src/site-build-runner.js";
+import { auditSiteOutputForLocalPaths } from "../../../packages/data-core/src/site-output-audit.js";
 import {
   bootstrapActiveLibrary,
   exportActiveLibraryBundle,
@@ -79,7 +82,14 @@ import {
   unlinkOwnerEntityRelation,
 } from "../../../packages/data-core/src/owner-entity-helpers.js";
 import { createLocalSiteServer } from "../../../packages/data-core/src/local-site-server.js";
-import { openTargetInShell } from "../../../packages/data-core/src/open-target.js";
+import { isAllowedExternalTarget, openTargetInShell } from "../../../packages/data-core/src/open-target.js";
+import { assertExportDestinationSafe } from "../../../packages/data-core/src/export-destination.js";
+import { fetchRemoteImage } from "../../../packages/data-core/src/remote-image-guard.js";
+import {
+  collectRegisteredLocalResourcePaths,
+  resolveAllowedLocalResourceTarget,
+} from "../../../packages/data-core/src/local-resource-access.js";
+import { sanitizeAssetUploadRequest } from "../../../packages/data-core/src/asset-upload-policy.js";
 import { createEntityId, createSlug } from "../../../packages/shared/src/slug.js";
 import { mergeSiteConfigPatch } from "../../../packages/data-core/src/site-content.js";
 import { runAutomationChecks } from "../../../packages/automation/src/automation-checks.js";
@@ -90,6 +100,11 @@ import { loadReferenceRegistry } from "../../../packages/data-core/src/reference
 import { loadLibraryFromBundleRoot, mergeLibraries } from "../../../packages/data-core/src/library-merge.js";
 
 const app = express();
+// Defense in depth for C-F01: Express matches routes case-insensitively by
+// default, while the session gate below used to compare a case-sensitive path
+// prefix. Keep route matching case-sensitive as well so case variants cannot
+// reach a side-effect handler even if a future refactor weakens the gate.
+app.set("case sensitive routing", true);
 const port = Number(process.env.OWNER_PORT || 4322);
 const runtimePaths = getRuntimePaths();
 const ownerDir = runtimePaths.ownerWebDir;
@@ -101,6 +116,157 @@ const localSiteServer = createLocalSiteServer({
   preferredPort: Number(process.env.LIBRARY_SITE_PORT || 4331),
 });
 
+// --- Owner local-service security (W3 / D3-A) ------------------------------
+//
+// The owner tool is a loopback HTTP service with many side-effect endpoints. It
+// must not be drivable by arbitrary web pages or other local processes:
+//   - a per-run bootstrap token (injected by the desktop process, or generated
+//     by the standalone dev server) is exchanged for an HttpOnly/SameSite=Strict
+//     session cookie via GET /?bootstrap=<token> (302 -> /);
+//   - all /api/* requests require that session cookie;
+//   - the Host header must be 127.0.0.1:<port> (DNS-rebinding protection);
+//   - a present Origin header must be the same loopback origin (CSRF protection).
+const OWNER_SESSION_COOKIE_NAME = "icm_owner_session";
+const OWNER_BOOTSTRAP_ENV = "ICM_OWNER_BOOTSTRAP_TOKEN";
+
+function createOwnerBootstrapToken() {
+  return randomBytes(32).toString("hex");
+}
+
+function resolveOwnerBootstrapToken(env = process.env) {
+  const fromEnvironment = String(env?.[OWNER_BOOTSTRAP_ENV] || "").trim();
+  return fromEnvironment || createOwnerBootstrapToken();
+}
+
+function formatOwnerBootstrapUrl(baseUrl, token) {
+  return `${String(baseUrl).replace(/\/+$/, "")}/?bootstrap=${encodeURIComponent(String(token))}`;
+}
+
+function hashOwnerSessionToken(token) {
+  return createHash("sha256").update(`owner-session:${String(token)}`).digest("hex");
+}
+
+function safeTokenEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left ?? ""), "utf8");
+  const rightBuffer = Buffer.from(String(right ?? ""), "utf8");
+  if (leftBuffer.length === 0 || leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function parseCookieHeader(headerValue) {
+  const cookies = {};
+  for (const part of String(headerValue || "").split(";")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) {
+      continue;
+    }
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (name) {
+      cookies[name] = value;
+    }
+  }
+  return cookies;
+}
+
+function createOwnerSecurityConfig(overrides = {}) {
+  const bootstrapToken = String(
+    overrides.bootstrapToken || resolveOwnerBootstrapToken(process.env),
+  ).trim();
+  return {
+    bootstrapToken,
+    sessionToken: hashOwnerSessionToken(bootstrapToken),
+    sessionCookieName: OWNER_SESSION_COOKIE_NAME,
+    // 0 means "use the actual listening port" (tests listen on port 0).
+    port: Number.isFinite(Number(overrides.port)) ? Number(overrides.port) : Number(process.env.OWNER_PORT || port),
+    openTarget: overrides.openTarget,
+    fetchImpl: overrides.fetchImpl,
+    resolveHostAddresses: overrides.resolveHostAddresses,
+    persistUploadedAsset: overrides.persistUploadedAsset,
+    allowOverwriteExport: Boolean(overrides.allowOverwriteExport),
+  };
+}
+
+const OWNER_SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "X-Frame-Options": "DENY",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
+function applyOwnerSecurityHeaders(response: import("express").Response) {
+  for (const [name, value] of Object.entries(OWNER_SECURITY_HEADERS)) {
+    response.setHeader(name, value);
+  }
+}
+
+function getOwnerSecurityConfig() {
+  if (!app.locals.ownerSecurity) {
+    app.locals.ownerSecurity = createOwnerSecurityConfig({});
+  }
+  return app.locals.ownerSecurity;
+}
+
+app.use((request, response, next) => {
+  applyOwnerSecurityHeaders(response);
+  next();
+});
+
+app.use((request, response, next) => {
+  const security = getOwnerSecurityConfig();
+  const localPort = security.port || (request.socket && request.socket.localPort) || port;
+  const expectedHost = `127.0.0.1:${localPort}`;
+  const expectedOrigin = `http://${expectedHost}`;
+
+  const hostHeader = String(request.headers.host || "").trim().toLowerCase();
+  if (hostHeader !== expectedHost) {
+    response.status(403).json({ error: "Forbidden owner host" });
+    return;
+  }
+  const originHeader = String(request.headers.origin || "").trim();
+  if (originHeader && originHeader.toLowerCase() !== expectedOrigin) {
+    response.status(403).json({ error: "Forbidden owner origin" });
+    return;
+  }
+
+  if (request.method === "GET" && request.path === "/" && request.query && request.query.bootstrap !== undefined) {
+    const provided = String(request.query.bootstrap || "");
+    if (!safeTokenEquals(provided, security.bootstrapToken)) {
+      response.status(401).json({ error: "Invalid owner bootstrap token" });
+      return;
+    }
+    response.setHeader(
+      "Set-Cookie",
+      `${security.sessionCookieName}=${security.sessionToken}; Path=/; HttpOnly; SameSite=Strict`,
+    );
+    response.redirect(302, "/");
+    return;
+  }
+
+  // C-F01: Express route matching is case-insensitive, so the authentication
+  // gate must be case-insensitive too (e.g. /API/... must not bypass /api/...).
+  const normalizedPath = request.path.toLowerCase();
+  if (normalizedPath === "/api" || normalizedPath.startsWith("/api/")) {
+    const cookies = parseCookieHeader(request.headers.cookie);
+    if (!safeTokenEquals(cookies[security.sessionCookieName] || "", security.sessionToken)) {
+      response.status(401).json({ error: "Owner session required" });
+      return;
+    }
+  }
+
+  next();
+});
+
+async function writeLocalGeneratedArtifacts() {
+  // Local owner flows keep local resource links (W5); public exports strip them.
+  return writeGeneratedArtifacts({ siteOutputMode: "local" });
+}
+
 async function ensureLibrarySiteReady(options = { buildIfMissing: false }) {
   const summary = await getActiveLibrarySummary();
   const indexPath = path.join(summary.buildSiteDir, "index.html");
@@ -110,7 +276,7 @@ async function ensureLibrarySiteReady(options = { buildIfMissing: false }) {
     if (!options.buildIfMissing) {
       throw new Error("Local site has not been built yet");
     }
-    await buildLibrarySite();
+    await buildLibrarySite({ siteOutputMode: "local", buildSource: "local" });
   }
   return localSiteServer.ensureStarted((await getActiveLibrarySummary()).buildSiteDir);
 }
@@ -140,39 +306,43 @@ app.get("/favicon.svg", async (_request, response, next) => {
 });
 app.get("/api/remote-image", async (request, response) => {
   try {
-    const url = new URL(String(request.query.url || ""));
-    if (!["http:", "https:"].includes(url.protocol)) {
-      response.status(400).json({ error: "Unsupported image protocol" });
-      return;
-    }
-    const upstream = await fetchWithWindowsFallback(url, {
-      headers: {
-        Accept: "image/*,*/*;q=0.8",
-      },
-    }, { fetchImpl: fetch });
-    if (!upstream.ok) {
-      response.status(upstream.status).json({ error: `Remote image request failed: ${upstream.status}` });
-      return;
-    }
-    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+    // W3/A3: resolve + block private/loopback/link-local/multicast addresses,
+    // enforce an image content-type allow-list, a 10MB size cap and a timeout.
+    const security = getOwnerSecurityConfig();
+    const { bytes, contentType } = await fetchRemoteImage(String(request.query.url || ""), {
+      fetchImpl: security.fetchImpl,
+      resolveHostAddresses: security.resolveHostAddresses,
+    });
     response.setHeader("Cache-Control", "public, max-age=1800");
-    response.type(contentType).send(Buffer.from(await upstream.arrayBuffer()));
+    response.type(contentType).send(bytes);
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 app.post("/api/open-resource", async (request, response) => {
   try {
+    const security = getOwnerSecurityConfig();
+    const openTarget = security.openTarget || openTargetInShell;
     const linkType = String(request.body?.linkType || "external").trim() === "local" ? "local" : "external";
     if (linkType === "local") {
-      const localPath = path.resolve(String(request.body?.localPath || "").trim());
+      const localPath = String(request.body?.localPath || "").trim();
+      // Empty localPath used to resolve to the current working directory and
+      // was opened by the shell. Reject it before touching the filesystem.
       if (!localPath) {
         response.status(400).json({ error: "Missing localPath" });
         return;
       }
-      await access(localPath);
-      await openTargetInShell(localPath);
-      response.json({ opened: true, target: localPath, linkType });
+      const runtimePaths = getRuntimePaths();
+      const summary = await getActiveLibrarySummary();
+      const library = await loadLibraryFromDisk();
+      const resolvedLocalPath = await resolveAllowedLocalResourceTarget(localPath, {
+        libraryRootDir: summary.rootDir,
+        assetsDirs: [runtimePaths.library.assetsDir],
+        contentDirs: [runtimePaths.library.contentLibraryDir, runtimePaths.library.contentSiteDir],
+        registeredLocalPaths: collectRegisteredLocalResourcePaths(library),
+      });
+      await openTarget(resolvedLocalPath);
+      response.json({ opened: true, target: resolvedLocalPath, linkType });
       return;
     }
 
@@ -181,8 +351,11 @@ app.post("/api/open-resource", async (request, response) => {
       response.status(400).json({ error: "Missing url" });
       return;
     }
-    new URL(url);
-    await openTargetInShell(url);
+    if (!isAllowedExternalTarget(url)) {
+      response.status(400).json({ error: "Unsupported url protocol" });
+      return;
+    }
+    await openTarget(url);
     response.json({ opened: true, target: url, linkType });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
@@ -445,7 +618,7 @@ async function previewOrSave(entityType, payload, shouldSave) {
 
   if (shouldSave) {
     await saveLibraryToDisk(validated);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
   }
 
   return {
@@ -690,7 +863,7 @@ function bucketForEntityType(entityType) {
 async function saveValidatedLibrary(library) {
   const validated = validateLibrary(normalizeOwnerManagedLibrary(library));
   await saveLibraryToDisk(validated);
-  await writeGeneratedArtifacts();
+  await writeLocalGeneratedArtifacts();
   return validated;
 }
 
@@ -961,7 +1134,7 @@ app.post("/api/library/merge", async (request, response) => {
     await mkdir(path.dirname(backupRoot), { recursive: true });
     await cp(runtimePaths.library.rootDir, backupRoot, { recursive: true });
     await saveLibraryToDisk(result.library);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({ merged: true, backupRoot, report: result.report, libraryMeta: await getActiveLibrarySummary() });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
@@ -983,11 +1156,13 @@ app.post("/api/library/open-site", async (_request, response) => {
 
 app.post("/api/library/build-site", async (_request, response) => {
   try {
-    const buildResult = await buildLibrarySite();
+    const buildResult = await buildLibrarySite({ siteOutputMode: "local", buildSource: "local" });
     const site = await ensureLibrarySiteReady({ buildIfMissing: false });
     response.json({
       built: true,
       outputDir: buildResult.outputDir,
+      siteOutputMode: buildResult.siteOutputMode,
+      strippedLocalLinks: buildResult.strippedLocalLinks,
       siteUrl: site.url,
       libraryMeta: await getActiveLibrarySummary(),
     });
@@ -1000,17 +1175,53 @@ app.post("/api/library/export-site", async (request, response) => {
   try {
     const destinationPath = String(request.body?.destinationPath || "").trim();
     if (!destinationPath) return response.status(400).json({ error: "Missing site export destination path" });
+    // W3/A3: never recursively delete a caller-controlled path without checks.
+    let resolvedTarget;
+    try {
+      resolvedTarget = await assertExportDestinationSafe(destinationPath, {
+        overwrite: Boolean(request.body?.overwrite),
+        activeLibraryRoot: runtimePaths.library.rootDir,
+      });
+    } catch (error) {
+      const code = String(error?.code || "destination-invalid");
+      return response.status(code === "destination-not-empty" ? 409 : 400).json({
+        error: error instanceof Error ? error.message : String(error),
+        code,
+        needsOverwrite: code === "destination-not-empty",
+      });
+    }
     const stagingPath = path.join(runtimePaths.appData.cacheDir, `site-export-${Date.now()}`);
     await mkdir(path.dirname(stagingPath), { recursive: true });
-    const buildResult = await buildLibrarySite({ outputDir: stagingPath, siteBase: String(request.body?.siteBase || "/") });
-    const resolvedTarget = path.resolve(destinationPath);
+    const buildResult = await buildLibrarySite({
+      outputDir: stagingPath,
+      siteBase: String(request.body?.siteBase || "/"),
+      buildSource: "export",
+      siteOutputMode: "public",
+    });
     const replacement = `${resolvedTarget}.staging-${Date.now()}`;
     await rm(replacement, { recursive: true, force: true });
     await cp(buildResult.outputDir, replacement, { recursive: true, force: true });
     await rm(resolvedTarget, { recursive: true, force: true });
     await rename(replacement, resolvedTarget);
     await rm(stagingPath, { recursive: true, force: true });
-    response.json({ exported: true, outputDir: resolvedTarget });
+    const outputAudit = await auditSiteOutputForLocalPaths(resolvedTarget);
+    if (!outputAudit.ok) {
+      return response.status(400).json({
+        error: "Public site export still contains local paths; exported files were not published",
+        localResourceUrls: outputAudit.localResourceUrls.slice(0, 5),
+        absolutePathHits: outputAudit.absolutePathHits.slice(0, 5),
+      });
+    }
+    response.json({
+      exported: true,
+      outputDir: resolvedTarget,
+      siteOutputMode: buildResult.siteOutputMode,
+      strippedLocalLinks: buildResult.strippedLocalLinks,
+      notice:
+        buildResult.strippedLocalLinks > 0
+          ? `已剥离 ${buildResult.strippedLocalLinks} 条本地链接（public 导出不包含本地路径）`
+          : "",
+    });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -1075,7 +1286,7 @@ app.post("/api/site", async (request, response) => {
     const currentSite = await loadSiteConfig();
     const site = mergeSiteConfigPatch(currentSite, request.body ?? {});
     await saveSiteConfig(site);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({
       saved: true,
       site,
@@ -1088,12 +1299,14 @@ app.post("/api/site", async (request, response) => {
 
 app.post("/api/rebuild", async (_request, response) => {
   try {
-    const buildResult = await buildLibrarySite();
+    const buildResult = await buildLibrarySite({ siteOutputMode: "local", buildSource: "local" });
     const site = await ensureLibrarySiteReady({ buildIfMissing: false });
-    const { indexes } = await writeGeneratedArtifacts();
+    const { indexes } = await writeLocalGeneratedArtifacts();
     response.json({
       rebuilt: true,
       outputDir: buildResult.outputDir,
+      siteOutputMode: buildResult.siteOutputMode,
+      strippedLocalLinks: buildResult.strippedLocalLinks,
       siteUrl: site.url,
       stats: indexes.stats,
       libraryMeta: await getActiveLibrarySummary(),
@@ -1612,10 +1825,13 @@ app.post("/api/assets/upload", async (request, response) => {
       return;
     }
 
+    // W3/A3: bucket allow-list, safe slug, extension allow-list and resolved
+    // containment inside the managed assets directory (no `../` traversal).
+    const sanitized = sanitizeAssetUploadRequest({ bucket, slug, fileName });
     const src = await persistUploadedImageAsset({
-      bucket,
-      slug,
-      fileName,
+      bucket: sanitized.bucket,
+      slug: sanitized.slug,
+      fileName: sanitized.fileName,
       bytes: decodeBase64Bytes(contentBase64),
     });
 
@@ -1662,7 +1878,7 @@ app.post("/api/articles", async (request, response) => {
     const article = buildArticle(articles, request.body || {});
     const validated = validateArticles(upsertCollection(articles, article) && articles);
     await saveArticlesToDisk(validated);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({
       mode: "created",
       article,
@@ -1683,7 +1899,7 @@ app.put("/api/articles/:id", async (request, response) => {
     });
     const validated = validateArticles(upsertCollection(articles, article) && articles);
     await saveArticlesToDisk(validated);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({
       mode: "updated",
       article,
@@ -1700,7 +1916,7 @@ app.delete("/api/articles/:id", async (request, response) => {
     const articles = await loadArticlesFromDisk();
     const nextArticles = articles.filter((item) => item.id !== request.params.id);
     await saveArticlesToDisk(nextArticles);
-    await writeGeneratedArtifacts();
+    await writeLocalGeneratedArtifacts();
     response.json({ deleted: request.params.id });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
@@ -1977,14 +2193,54 @@ app.post("/api/automation/llm/test", async (request, response) => {
   }
 });
 
+/**
+ * Returns the configured owner Express app without listening. Used by tests and
+ * by the standalone/desktop entrypoint (`startOwnerApp`).
+ */
+export function createOwnerApp(options = {}) {
+  app.locals.ownerSecurity = createOwnerSecurityConfig(options);
+  return app;
+}
+
+export const ownerApp = app;
+
+export { resolveOwnerBootstrapToken, formatOwnerBootstrapUrl, hashOwnerSessionToken };
+
 async function startOwnerApp() {
+  const bootstrapToken = resolveOwnerBootstrapToken(process.env);
+  app.locals.ownerSecurity = createOwnerSecurityConfig({ bootstrapToken, port });
   await bootstrapActiveLibrary({ defaultLibraryName: "\u6211\u7684\u8d44\u6599\u5e93", seedFromLegacy: false });
   app.listen(port, "127.0.0.1", () => {
-    process.stdout.write(`Owner tool running at http://127.0.0.1:${port}\n`);
+    const baseUrl = `http://127.0.0.1:${port}`;
+    process.stdout.write(`Owner tool running at ${baseUrl}\n`);
+    if (process.env[OWNER_BOOTSTRAP_ENV]) {
+      process.stdout.write(`Owner bootstrap URL: ${formatOwnerBootstrapUrl(baseUrl, bootstrapToken)}\n`);
+    } else {
+      // Standalone dev mode: never silently allow requests. This one-time URL
+      // (printed once, not logged elsewhere) is required to obtain a session.
+      process.stdout.write(
+        `Owner standalone dev session (one-time bootstrap URL): ${formatOwnerBootstrapUrl(baseUrl, bootstrapToken)}\n`,
+      );
+    }
   });
 }
 
-void startOwnerApp().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  process.exitCode = 1;
-});
+const isDirectlyInvoked = (() => {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  try {
+    return import.meta.url === pathToFileURL(path.resolve(entry)).href;
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectlyInvoked) {
+  void startOwnerApp().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
+

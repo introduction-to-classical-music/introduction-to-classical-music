@@ -1,0 +1,11 @@
+# Direct runtime dependencies (ranges mirror pyproject.toml).
+#
+# `requirements.lock` is the hash-locked pinned set generated with
+# `pip-compile --generate-hashes --allow-unsafe` from the verified Windows
+# environment (see the lock header). This file stays range-based for editable
+# installs; CI installs the lock with `--require-hashes`.
+fastapi>=0.115,<1.0
+httpx>=0.28,<1.0
+playwright>=1.58,<2.0
+pydantic>=2.10,<3.0
+uvicorn>=0.34,<1.0

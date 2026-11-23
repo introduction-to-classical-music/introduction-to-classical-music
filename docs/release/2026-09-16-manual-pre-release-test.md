@@ -1,10 +1,12 @@
 # 不全书人工复测手册
 
+> 适用范围：**0.1.1**（文档名保留创建日期）。本手册的版本期望已与 0.1.1 对齐；验收事实汇总见 [0.1.1-acceptance.md](0.1.1-acceptance.md)。
+
 ## 1. 本轮目标与准备状态
 
 本手册验证安装版、开发版、library 协作和静态站点发布彼此隔离。复测前置材料已经生成，不需要手工制作测试库或修改 JSON。
 
-固定根目录：`F:\personal\Sunhaoran\Introduction to Classical Music`
+**路径约定**：以下相对路径均以工作区根目录为基准；`%APPDATA%` 指当前 Windows 用户的 `Roaming` 目录。请按本机实际工作区位置替换，不要把本机绝对路径写回仓库或文档。
 
 | 项目 | 路径 |
 | --- | --- |
@@ -21,12 +23,14 @@
 ## 2. 干净安装与首次启动
 
 1. 打开 `local-install\buquanshu\不全书.exe`。
-2. 在启动器右下角查看版本号，应显示 `版本 0.1.0`；该版本来自当前安装包，不是 library 版本。
+2. 在启动器右下角查看版本号，应显示 `版本 0.1.1`；该版本来自当前安装包，不是 library 版本。
 3. 在启动器中查看库详情，库名称应为“默认资料库”。
 4. 点击“打开库目录”。资源管理器应打开 `%APPDATA%\buquanshu\libraries\default-library`。若资源管理器地址栏因窗口宽度压缩了反斜杠，请同时打开 `%APPDATA%\buquanshu\state.json`，确认 `activeLibraryPath` 以 `...\AppData\Roaming\buquanshu\libraries\default-library` 结尾。
 5. 失败条件：库路径指向 `local-install\buquanshu\library`。该目录只能作为只读种子，不能作为活动库。
 6. 确认作曲家、人物、作品和版本数量均为 0；默认使用手册专栏可以存在。
 7. 关闭并重新启动程序，确认版本、路径和数量不变。
+
+> 说明：0.1.1 已发布安装包的默认库种子与构建 meta 由 W4 之前的构建产生（`appVersion=0.1.0`、旧种子站点含 Pages 前缀），属于已发布二进制现状；W4/W10b 修复只影响未来构建。差异与原因见 [0.1.1-acceptance.md](0.1.1-acceptance.md) §3。复测时以安装包/产品版本 0.1.1 为准。
 
 ## 3. Library 载体兼容性
 
@@ -110,4 +114,4 @@
 - 站点构建成功且不泄漏本机路径；
 - 安装版、开发版、官方库和站点仓库互不写入。
 
-任一步骤失败时停止后续写入。清理前 AppData 和旧安装相关资料保存在 `archives\pretest-20260918-final`；更早的历史运行态仍保存在 `C:\Users\HIT-IVAFFR\AppData\Roaming\buquanshu-preinstall-20260912`。
+任一步骤失败时停止后续写入。清理前 AppData 和旧安装相关资料保存在 `archives\pretest-20260918-final`；更早的历史运行态（如有）保存于 `%APPDATA%\buquanshu-preinstall-20260912`（历史路径，仅作本机清理参考）。

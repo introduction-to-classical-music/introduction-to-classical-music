@@ -15,7 +15,7 @@ describe("desktop shell scaffolding", () => {
     expect(packageJson.scripts["desktop:dist"]).toContain("npm run build");
     expect(packageJson.scripts["desktop:dist"]).toContain("retrieval:portable:build");
     expect(packageJson.scripts["desktop:dist"]).toContain("clean-desktop-release.mjs");
-    expect(packageJson.scripts["desktop:dist"]).toContain("patch-release-icons.mjs");
+    expect(packageJson.build?.afterPack).toBe("scripts/electron-after-pack.mjs");
     expect(packageJson.scripts["retrieval:portable:build"]).toContain("build-portable.ps1");
     expect(packageJson.build?.extraResources?.[0]?.from).toBe("tools/recording-retrieval-service/app/dist/portable");
     expect(packageJson.build?.files).toContain("data/**/*");
@@ -78,6 +78,17 @@ describe("desktop shell scaffolding", () => {
     expect(mainProcess).toContain('ipcMain.handle("desktop:activate-library"');
     expect(mainProcess).toContain("restartOwnerServiceAndWindowSoon");
     expect(mainProcess).toContain("app.getVersion()");
+    expect(mainProcess).toContain("process.env.ICM_APP_VERSION = app.getVersion()");
+    expect(mainProcess).toContain("needsSiteRebuild");
+    // W3: the desktop process injects a per-run owner bootstrap token.
+    expect(mainProcess).toContain("ICM_OWNER_BOOTSTRAP_TOKEN");
+    expect(mainProcess).toContain("createOwnerBootstrapToken");
+    expect(mainProcess).toContain("ownerBootstrapUrl");
+    // W3: external links are protocol-restricted; local resource opening is IPC.
+    expect(mainProcess).toContain("isAllowedExternalTarget");
+    expect(mainProcess).toContain("Unsupported external link protocol");
+    expect(mainProcess).toContain("desktop:open-local-resource");
+    expect(mainProcess).toContain("recentlyPickedLocalResourcePaths");
     expect(mainProcess).toContain('ipcMain.handle("launcher:open-library-folder"');
     expect(mainProcess).toContain('ipcMain.handle("launcher:window-control"');
     expect(mainProcess).toContain('ipcMain.handle("desktop:pick-library-folder"');

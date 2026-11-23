@@ -30,7 +30,7 @@ describe("llm config", () => {
     expect(merged.model).toBe("test-model-2");
   });
 
-  it("returns apiKey in the sanitized owner payload so the local form can stay filled", () => {
+  it("never returns the raw apiKey in the sanitized owner payload", () => {
     const sanitized = sanitizeLlmConfig({
       ...defaultLlmConfig,
       enabled: true,
@@ -39,8 +39,20 @@ describe("llm config", () => {
       model: "test-model",
     });
 
-    expect(sanitized.apiKey).toBe("secret-key");
+    expect(sanitized.apiKey).toBe("");
     expect(sanitized.hasApiKey).toBe(true);
+    expect(sanitized.apiKeyMasked).toBe("********");
+    expect(JSON.stringify(sanitized)).not.toContain("secret-key");
+  });
+
+  it("reports hasApiKey=false for an empty key without masking", () => {
+    const sanitized = sanitizeLlmConfig({
+      ...defaultLlmConfig,
+      apiKey: "",
+    });
+    expect(sanitized.apiKey).toBe("");
+    expect(sanitized.hasApiKey).toBe(false);
+    expect(sanitized.apiKeyMasked).toBe("");
   });
 
   it("tests an OpenAI-compatible endpoint", async () => {

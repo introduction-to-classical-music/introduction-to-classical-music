@@ -3,7 +3,8 @@ import path from "node:path";
 
 export const LIBRARY_BUNDLE_SCHEMA_VERSION = "library-bundle-v1";
 export const APP_DISPLAY_NAME = "Introduction to Classical Music";
-export const APP_VERSION = "0.1.0";
+// The app version is no longer a constant here: use `getAppVersion()` from
+// `app-version.ts` (env injected by the desktop process, else package.json).
 
 export type RuntimePaths = {
   mode: "legacy" | "bundle";

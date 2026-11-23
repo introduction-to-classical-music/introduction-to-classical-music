@@ -1,5 +1,6 @@
 ---
 import { buildDirectorySections, createDirectoryDisplayEntry, type DirectoryEntry } from "@/lib/directory";
+import { emphasizeHtml } from "@/lib/directory-emphasis";
 import { resolveSiteImageSrc } from "@/lib/site-assets";
 
 interface Props {
@@ -23,14 +24,6 @@ const sectionSets = {
   birth: buildDirectorySections(entries, "birth"),
   country: buildDirectorySections(entries, "country"),
 };
-
-function emphasize(value: string, highlight: string) {
-  if (!value || !highlight || !value.includes(highlight)) {
-    return value;
-  }
-
-  return value.replace(highlight, `<strong>${highlight}</strong>`);
-}
 ---
 
 <section class="directory-browser" data-directory-browser>
@@ -88,11 +81,11 @@ function emphasize(value: string, highlight: string) {
                             <div class="directory-row__names">
                               <h3>{display.shortName}</h3>
                               {display.fullName && display.fullName !== display.shortName && (
-                                <p set:html={emphasize(display.fullName, display.fullNameHighlight)}></p>
+                                <p set:html={emphasizeHtml(display.fullName, display.fullNameHighlight)}></p>
                               )}
-                              {display.nameLatin && <p set:html={emphasize(display.nameLatin, display.nameLatinHighlight)}></p>}
+                              {display.nameLatin && <p set:html={emphasizeHtml(display.nameLatin, display.nameLatinHighlight)}></p>}
                               {display.originalName && (
-                                <p set:html={emphasize(display.originalName, display.originalNameHighlight)}></p>
+                                <p set:html={emphasizeHtml(display.originalName, display.originalNameHighlight)}></p>
                               )}
                               <p class="directory-row__facts">
                                 {display.countryLabel}

@@ -9,6 +9,34 @@ import {
   parseCliArgs,
 } from "./lib/library-ops.mjs";
 
+// Keep in sync with packages/data-core/src/library-state-files.ts.
+// Internal bookkeeping (crash-recovery commit marker, atomic-write leftovers)
+// must never be copied into the official library source tree.
+const LIBRARY_COMMIT_FILE_NAME = ".library-commit.json";
+
+function isLibraryInternalStateEntry(value) {
+  const normalized = String(value ?? "").replace(/\\/g, "/");
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return false;
+  }
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if (segments[index] === "runtime" && segments[index + 1] === "state") {
+      return true;
+    }
+  }
+  const basename = segments[segments.length - 1];
+  return basename === LIBRARY_COMMIT_FILE_NAME || /^\..+\.tmp$/.test(basename);
+}
+
+function createLibraryCopyFilter(sourceRoot) {
+  const resolvedRoot = path.resolve(sourceRoot);
+  return (sourcePath) => {
+    const relativePath = path.relative(resolvedRoot, sourcePath);
+    return !relativePath || !isLibraryInternalStateEntry(relativePath);
+  };
+}
+
 function requiredArg(args, name) {
   const positionalIndex = name === "source" ? 0 : 1;
   const value = String(args[name] || args._[positionalIndex] || "").trim();
@@ -67,8 +95,16 @@ async function copySourceOnly(sourceRoot, targetRoot) {
   }
   await mkdir(targetRoot, { recursive: true });
   await cp(path.join(sourceRoot, "library.manifest.json"), path.join(targetRoot, "library.manifest.json"), { force: true });
-  await cp(path.join(sourceRoot, "content"), path.join(targetRoot, "content"), { recursive: true, force: true });
-  await cp(path.join(sourceRoot, "assets"), path.join(targetRoot, "assets"), { recursive: true, force: true });
+  await cp(path.join(sourceRoot, "content"), path.join(targetRoot, "content"), {
+    recursive: true,
+    force: true,
+    filter: createLibraryCopyFilter(path.join(sourceRoot, "content")),
+  });
+  await cp(path.join(sourceRoot, "assets"), path.join(targetRoot, "assets"), {
+    recursive: true,
+    force: true,
+    filter: createLibraryCopyFilter(path.join(sourceRoot, "assets")),
+  });
 }
 
 const args = parseCliArgs(process.argv.slice(2));

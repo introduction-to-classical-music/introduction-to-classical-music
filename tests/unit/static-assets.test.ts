@@ -47,9 +47,10 @@ describe("static assets wiring", () => {
     const ownerServer = await fs.readFile(path.resolve("apps/owner/server/owner-app.ts"), "utf8");
 
     expect(ownerServer).toContain('app.get("/api/remote-image"');
-    expect(ownerServer).toContain('new URL(String(request.query.url || ""))');
+    // W3: the proxy is guarded against SSRF / oversized / non-image responses.
+    expect(ownerServer).toContain("fetchRemoteImage");
+    expect(ownerServer).toContain("resolveHostAddresses");
     expect(ownerServer).toContain('response.type(contentType)');
-    expect(ownerServer).toContain('Buffer.from(await upstream.arrayBuffer())');
   });
 
   it("builds the release site from the bundled default library instead of legacy repo data", async () => {

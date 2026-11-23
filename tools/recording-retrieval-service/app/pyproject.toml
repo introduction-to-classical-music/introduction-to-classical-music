@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recording-retrieval-service"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Standalone and owner-compatible Recording Retrieval Service"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -27,6 +27,12 @@ dev = [
 where = ["."]
 include = ["app*"]
 
+[tool.setuptools.dynamic]
+version = { attr = "app.version.APP_VERSION" }
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+  "network: tests that contact real external platforms (excluded from offline CI)",
+]
