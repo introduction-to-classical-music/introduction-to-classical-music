@@ -5,37 +5,31 @@ This project publishes Windows release artifacts from the public repository
 Builds are produced by the public GitHub Actions CI and released from GitHub
 Releases.
 
-## Windows — SignPath Foundation (application in progress)
+## Windows — currently unsigned
 
-We are applying to the SignPath Foundation free code-signing program for
-open-source projects.
+The 0.1.2 release is **unsigned**. A SignPath Foundation application was
+submitted and was not approved at this time because the project does not yet
+meet the Foundation's public-visibility threshold. We respect that decision and
+may reapply after the project has broader adoption, or use a paid certificate /
+paid signing service in a future release.
 
-When approved, the public statement will be:
-
-> Free code signing provided by SignPath.io, certificate by SignPath Foundation.
-
-### What will be signed
-
-- Windows installer: `buquanshu-setup-<version>.exe` (NSIS)
-- The Electron application executable contained in the installer, if supported
-  by the approved SignPath artifact configuration.
-
-Artifacts are built from this repository by CI. Only CI-built artifacts are
-submitted to SignPath for signing. The private key is held by SignPath in its
-HSM; this project does not store or receive the private key.
+Current releases are built by the public GitHub Actions CI and published as
+GitHub Releases from this public repository. Users should verify
+`SHA256SUMS.txt` / `checksums.json`, and may build from source. No private
+signing key is stored in this repository.
 
 ### Team roles
 
 - Authors / committers: [`@Hektor1277`](https://github.com/Hektor1277),
   [`@z1645444`](https://github.com/z1645444)
 - Reviewers: [`@Hektor1277`](https://github.com/Hektor1277),
-  [`@z1645444`](https://github.com/z1645444) — changes proposed by external
-  contributors are reviewed by a maintainer before merge.
+  [`@z1645444`](https://github.com/z1645444) — external pull requests are
+  reviewed by a maintainer before merge.
 - Approvers: [`@Hektor1277`](https://github.com/Hektor1277),
-  [`@z1645444`](https://github.com/z1645444) — every SignPath signing request
-  requires explicit approval by one of the listed approvers.
+  [`@z1645444`](https://github.com/z1645444) — future signing requests require
+  explicit approval by one of the listed approvers.
 
-All team members must use MFA for GitHub and SignPath.
+All team members must use MFA for GitHub and any future signing service.
 
 ## Artifact verification
 

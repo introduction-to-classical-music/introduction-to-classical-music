@@ -54,3 +54,18 @@
 3. `npm run verify:signing -- -InstallerPath <installer> -RequireSigned`：正式 Release 必须 Authenticode Valid；无证书只能产出 **候选**，tag 发布必须被 CI gate 阻止。
 4. `npm run release:checksums` 生成 SHA256SUMS.txt/checksums.json；安装包/latest.yml/README 命名需一致（ASCII `buquanshu-setup-<version>.exe`）。
 5. 证据与例外复审：`security/DEPENDENCY-EXCEPTIONS.md` 到期前复审；安装/升级/卸载/GUI 验收另由 E-VERIFY 执行。
+
+## 一次性 unsigned 稳定版发布（例外通道）
+
+仅在没有证书但用户明确同意发布 unsigned **稳定版**时使用；不要永久删除正式签名 gate。
+
+1. 合并 `dev` → `main` PR，确保 PR 检查通过；
+2. 设置仓库变量 `ALLOW_UNSIGNED_RELEASE=true`，使 `windows-release` stable tag job 暂时跳过（保留代码与变量，事后必须复位）；
+3. 推送/创建正常版本 tag（例如 `v0.1.2`）；
+4. 手动运行 **Unsigned Stable Release** workflow，输入该 tag 与 `UNSIGNED` 确认；
+   - workflow 构建 unsigned 安装包、校验 payload/audit/checksums，并创建正常 GitHub Release；
+   - Release notes 必须包含未签名安装说明；
+5. 确认 Release 资产（installer/checksums/SBOM/RRS portable/LICENSE）完整；
+6. 立即把 `ALLOW_UNSIGNED_RELEASE` 设回 `false`；
+7. 下一次正式版本应恢复签名 gate，获取证书后发新版本（不能移动已发布 tag）。
+

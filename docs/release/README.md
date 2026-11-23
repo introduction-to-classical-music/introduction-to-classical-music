@@ -4,9 +4,9 @@
 
 ## 当前发布矩阵
 
-当前 `v0.1.1` 公开发布包括 Windows 安装版和 GitHub 源码。`v0.1.0` 的便携版为历史发布资产，不随本次更新。
+当前 `v0.1.2` 公开发布包括 Windows 安装版（unsigned）和 GitHub 源码。`v0.1.0` 的便携版为历史发布资产，不随本次更新。
 
-- Windows 安装版：`buquanshu-setup-0.1.1.exe`
+- Windows 安装版：`buquanshu-setup-0.1.2.exe`（unsigned）
 - 历史 Windows 便携版（`v0.1.0`）：
   - `BuQuanShu-Portable-0.1.0.exe`
   - `BuQuanShu-Portable-0.1.0.zip`
@@ -23,23 +23,21 @@
 
 ## 目录说明
 
-- [0.1.1-acceptance.md](0.1.1-acceptance.md)
-  0.1.1 补救批次验收记录（条件性通过；含安装验证/Pages provenance/默认库与安装种子核对）
+- [0.1.2-release-notes.md](0.1.2-release-notes.md)
+  当前版本变更与 Windows 安装说明
+- [0.1.2-installation-guide.md](0.1.2-installation-guide.md)
+  当前版本安装说明
 - [0.1.1-release-notes.md](0.1.1-release-notes.md)
-  当前版本的变更
+  历史版本变更
 - [0.1.1-installation-guide.md](0.1.1-installation-guide.md)
-  当前版本的安装说明
-- [2026-09-16-manual-pre-release-test.md](2026-09-16-manual-pre-release-test.md)
-  人工复测手册（版本期望已更新到 0.1.1）
-- [0.1.0-pre-release-checklist.md](0.1.0-pre-release-checklist.md)
-  历史 `v0.1.0` 检查项
+  历史版本安装说明
 - [0.1.0-installation-guide.md](0.1.0-installation-guide.md)
-  历史版本安装说明（含升级、卸载与历史 AppData 路径）
+  历史 `v0.1.0` 安装说明
 - [0.1.0-release-notes.md](0.1.0-release-notes.md)
-  历史版本的公开发布说明
+  历史 `v0.1.0` 发布说明
 - [0.1.0-package-manifest.md](0.1.0-package-manifest.md)
-  历史版本产物清单
+  历史 `v0.1.0` 产物清单
 - [PROJECT_BOUNDARIES.md](PROJECT_BOUNDARIES.md)
   安装版、便携版、源码仓库与互联网部署的边界定义
 - [data-publication-boundary.md](data-publication-boundary.md)
-  数据公开边界：官方库私有、内部工件/联系方式不公开、公开产物范围与检查方法
+  数据公开边界

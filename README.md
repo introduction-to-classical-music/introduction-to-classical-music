@@ -14,14 +14,14 @@
 
 ## Code signing policy / 代码签名政策
 
-Free code signing provided by SignPath.io, certificate by SignPath Foundation (application in progress).
+Windows 安装包当前未使用代码签名证书；未来获得可信签名后再更新签名策略。
 
 - Committers / reviewers: [@Hektor1277](https://github.com/Hektor1277), [@z1645444](https://github.com/z1645444)
 - Approvers: [@Hektor1277](https://github.com/Hektor1277), [@z1645444](https://github.com/z1645444)
 - Full policy: [CODE-SIGNING-POLICY.md](CODE-SIGNING-POLICY.md)
 - Privacy policy: [PRIVACY.md](PRIVACY.md)
 
-本项目正在申请 SignPath Foundation 免费开源代码签名；获批后后续 Windows 发布资产将使用 SignPath Foundation 证书签名，当前公开的 `0.1.1` 仍是未签名版本。
+当前 Windows 安装包未使用代码签名证书；未来获得可信签名后会在新版本更新。
 
 ## 当前发布内容
 
@@ -29,12 +29,12 @@ Free code signing provided by SignPath.io, certificate by SignPath Foundation (a
 
 ### 1. Windows 安装版
 
-> 代码签名：本项目正在申请 SignPath Foundation 免费开源代码签名。获批后，后续 Windows 发布资产将使用 SignPath Foundation 证书签名；当前公开的 `0.1.1` 仍是未签名版本。Free code signing provided by SignPath.io, certificate by SignPath Foundation (application in progress).
+> 代码签名：本项目正在申请 SignPath Foundation 免费开源代码签名。获批后，后续 Windows 发布资产将使用 SignPath Foundation 证书签名；当前公开的 `0.1.1` 仍是未签名版本。Windows 安装包当前未使用代码签名证书；未来获得可信签名后再更新签名策略。
 
 
 适合绝大多数普通用户。
 
-- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `buquanshu-setup-0.1.1.exe`（当前公开版本；0.1.2 候选尚未发布）
+- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `buquanshu-setup-0.1.2.exe`（当前发布；unsigned，见安装说明）
 - 双击安装后即可使用
 - 自带默认空资料库与《不全书使用手册》
 - 首次打开进入桌面启动器
@@ -63,7 +63,7 @@ Free code signing provided by SignPath.io, certificate by SignPath Foundation (a
 ### 方式一：直接安装
 
 1. 打开 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)
-2. 下载 `buquanshu-setup-0.1.1.exe`（当前公开版本；0.1.2 候选见下文）
+2. 下载 `buquanshu-setup-0.1.2.exe`（当前发布；unsigned，见安装说明）
 3. 双击运行安装程序
 4. 选择安装目录并完成安装
 5. 安装完成后启动 `不全书`
@@ -174,9 +174,8 @@ npm run package:windows
 ## 更多文档
 
 - [发布文档索引](docs/release/README.md)
-- [安装说明](docs/release/0.1.1-installation-guide.md)
-- [发布说明](docs/release/0.1.1-release-notes.md)
-- [维护里程碑与后续工作](docs/maintenance/0.1.1-milestone.md)
+- [安装说明](docs/release/0.1.2-installation-guide.md)
+- [发布说明](docs/release/0.1.2-release-notes.md)
 - [发布流程](RELEASING.md)
 - [贡献说明](CONTRIBUTING.md)
 - [安全说明](SECURITY.md)
@@ -189,17 +188,14 @@ npm run package:windows
 
 本项目不会在公共仓库中附带来源不明或版权不清晰的音视频文件、封面图或开发者个人内容包。
 
-## 0.1.2 技术预览（unsigned，2026-11-23）
+## 0.1.2 发布（unsigned，2026-11-23）
 
-`v0.1.2-preview.1` 是 **未签名技术预览**，用于提前获得用户反馈和公开采用信号；不是正式稳定版。
+0.1.2 是安全加固与发布工程收口版本。
 
-- Windows 可能显示 **“Windows protected your PC / 未知发布者”**；仅在信任来源时选择“更多信息 → 仍要运行”；
-- 请用 Release 中的 `SHA256SUMS.txt` / `checksums.json` 校验；源码构建方式见“源码安装”；
-- 安装/GUI BVT 尚未在当前 unsigned 环境完成，技术预览请自行在隔离环境验证；
-- 正式稳定版会在获得可信代码签名后另行发布。
+> **Windows 安装说明**：当前安装包尚未使用代码签名证书，Windows 可能显示“未知发布者 / Windows protected your PC”。请核对 Release 中的 SHA256/SBOM，或从源码构建；正式签名版本将在后续版本发布。
 
-下载与说明见 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)。
+- 安装包：`buquanshu-setup-0.1.2.exe`；依赖例外见 `security/DEPENDENCY-EXCEPTIONS.md`（复审 2026-12-31）。
+- 升级/安装：见 [0.1.2 安装说明](docs/release/0.1.2-installation-guide.md)。
+- 变更：见 [0.1.2 发布说明](docs/release/0.1.2-release-notes.md)。
 
-## 0.1.2 发布候选（2026-11-18）
-
-0.1.2 为安全加固候选版本，正式 Release 仅在具有有效 Authenticode 签名时发布；当前无证书产物仅用于候选/内部验收。下载资产命名以 `buquanshu-setup-0.1.2.exe` 为准，依赖例外见 `security/DEPENDENCY-EXCEPTIONS.md`。
+下载与校验资产见 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)。

@@ -1,22 +1,37 @@
-name: Preview Release (unsigned)
+name: Unsigned Stable Release (manual exception)
+
+# One-time/manual release path for a stable version when no code-signing
+# certificate is available. It must be started explicitly and requires the
+# operator to type UNSIGNED. The normal signed tag workflow remains the
+# default; set the repository variable ALLOW_UNSIGNED_RELEASE=true before
+# pushing the tag, then set it back to false after the release.
 
 on:
-  push:
-    tags:
-      - "v*-preview.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag, e.g. v0.1.2"
+        required: true
+        type: string
+      confirmation:
+        description: "Type UNSIGNED to confirm this is an unsigned release"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  preview-release:
-    if: startsWith(github.ref_name, 'v') && contains(github.ref_name, '-preview.')
+  unsigned-release:
+    if: github.event.inputs.confirmation == 'UNSIGNED' && startsWith(github.event.inputs.tag, 'v')
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -40,18 +55,17 @@ jobs:
           npm run audit:release
           npm run release:checksums
 
-      - name: Create unsigned GitHub pre-release
+      - name: Create normal stable GitHub Release (unsigned exception)
         shell: pwsh
         run: |
-          $tag = $env:GITHUB_REF_NAME
-          if ($tag -notmatch '-preview\.') { throw "preview tag required: $tag" }
-          $title = "不全书 0.1.2 Preview 1（unsigned / 技术预览）"
-          $notes = "docs/release/0.1.2-preview.1-release-notes.md"
+          $tag = "${{ github.event.inputs.tag }}"
+          $title = "不全书 0.1.2"
+          $notes = "docs/release/0.1.2-release-notes.md"
           $existing = gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --prerelease --title $title --notes-file $notes --verify-tag
+            gh release create $tag --title $title --notes-file $notes --latest --verify-tag
           } else {
-            gh release edit $tag --prerelease --title $title --notes-file $notes
+            gh release edit $tag --title $title --notes-file $notes --latest
           }
           $assets = @(
             Get-ChildItem output/releases/buquanshu-setup-*.exe,
@@ -67,4 +81,4 @@ jobs:
             NOTICE
           ) | Where-Object { Test-Path -LiteralPath $_.FullName }
           gh release upload $tag @($assets.FullName) --clobber
-          Write-Host "PREVIEW_RELEASE=$tag assets=$($assets.Count)"
+          Write-Host "UNSIGNED_STABLE_RELEASE=$tag assets=$($assets.Count)"

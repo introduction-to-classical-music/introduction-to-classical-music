@@ -46,7 +46,4 @@ MANUAL_TEST_CHECKLIST.local.md
 .worktrees/
 .playwright-cli
 
-.planning/**
-!.planning/codebase/
-!.planning/codebase/**
 
