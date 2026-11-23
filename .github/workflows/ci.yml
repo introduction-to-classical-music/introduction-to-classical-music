@@ -79,7 +79,7 @@ jobs:
           retention-days: 14
 
   windows-release:
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-preview.')
     runs-on: windows-latest
     permissions:
       contents: write

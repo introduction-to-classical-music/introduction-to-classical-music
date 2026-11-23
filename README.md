@@ -189,6 +189,17 @@ npm run package:windows
 
 本项目不会在公共仓库中附带来源不明或版权不清晰的音视频文件、封面图或开发者个人内容包。
 
+## 0.1.2 技术预览（unsigned，2026-11-23）
+
+`v0.1.2-preview.1` 是 **未签名技术预览**，用于提前获得用户反馈和公开采用信号；不是正式稳定版。
+
+- Windows 可能显示 **“Windows protected your PC / 未知发布者”**；仅在信任来源时选择“更多信息 → 仍要运行”；
+- 请用 Release 中的 `SHA256SUMS.txt` / `checksums.json` 校验；源码构建方式见“源码安装”；
+- 安装/GUI BVT 尚未在当前 unsigned 环境完成，技术预览请自行在隔离环境验证；
+- 正式稳定版会在获得可信代码签名后另行发布。
+
+下载与说明见 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)。
+
 ## 0.1.2 发布候选（2026-11-18）
 
 0.1.2 为安全加固候选版本，正式 Release 仅在具有有效 Authenticode 签名时发布；当前无证书产物仅用于候选/内部验收。下载资产命名以 `buquanshu-setup-0.1.2.exe` 为准，依赖例外见 `security/DEPENDENCY-EXCEPTIONS.md`。

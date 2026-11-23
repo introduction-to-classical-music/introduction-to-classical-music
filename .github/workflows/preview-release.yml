@@ -1,0 +1,70 @@
+name: Preview Release (unsigned)
+
+on:
+  push:
+    tags:
+      - "v*-preview.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  preview-release:
+    if: startsWith(github.ref_name, 'v') && contains(github.ref_name, '-preview.')
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - run: npm run bootstrap:windows
+      - run: npm run doctor:windows
+      - run: npm run check
+      - run: npm run build
+      - run: npm run package:windows
+
+      - name: Verify unsigned installer payload
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem output/releases/buquanshu-setup-*.exe | Select-Object -First 1
+          if (-not $installer) { throw "installer not found" }
+          ./scripts/windows/ci-verify-installer-payload.ps1 -InstallerPath $installer.FullName
+          npm run audit:release
+          npm run release:checksums
+
+      - name: Create unsigned GitHub pre-release
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '-preview\.') { throw "preview tag required: $tag" }
+          $title = "不全书 0.1.2 Preview 1（unsigned / 技术预览）"
+          $notes = "docs/release/0.1.2-preview.1-release-notes.md"
+          $existing = gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --prerelease --title $title --notes-file $notes --verify-tag
+          } else {
+            gh release edit $tag --prerelease --title $title --notes-file $notes
+          }
+          $assets = @(
+            Get-ChildItem output/releases/buquanshu-setup-*.exe,
+            output/releases/buquanshu-setup-*.exe.blockmap,
+            output/releases/latest.yml,
+            output/releases/SHA256SUMS.txt,
+            output/releases/checksums.json,
+            tools/recording-retrieval-service/app/dist/recording-retrieval-service-portable-*.zip,
+            tools/recording-retrieval-service/app/dist/recording-retrieval-service-portable-*.zip.build-info.json,
+            SBOM.md,
+            THIRD_PARTY_NOTICES.md,
+            LICENSE,
+            NOTICE
+          ) | Where-Object { Test-Path -LiteralPath $_.FullName }
+          gh release upload $tag @($assets.FullName) --clobber
+          Write-Host "PREVIEW_RELEASE=$tag assets=$($assets.Count)"
