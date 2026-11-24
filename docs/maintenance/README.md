@@ -2,7 +2,7 @@
 
 本文件是项目维护的唯一入口。软件源码、官方资料库、安装运行态和静态站点必须保持为四个独立边界。
 
-`0.1.1` 的当前进度、验证证据和后续任务见 [里程碑](./0.1.1-milestone.md)。发布说明见 [发布索引](../release/README.md)。
+发布说明与安装说明见 [发布索引](../release/README.md)。
 
 ## 当前边界
 
@@ -24,7 +24,6 @@
 
 - [资料库工作流](./library-workflow.md)
 - [站点发布工作流](./site-publish-workflow.md)
-- [仓库与安装隔离计划](../plans/2026-09-11-repository-library-installation-isolation.md)
 
 ## 不可违反的检查
 

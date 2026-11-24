@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
@@ -8,12 +9,16 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
+import { getRuntimePaths, resolveDevelopmentAppDataRoot } from "../../packages/data-core/src/app-paths.js";
+import { isAllowedExternalTarget } from "../../packages/data-core/src/open-target.js";
+import { redactSensitiveText } from "../../packages/shared/src/redact.js";
+import { needsSiteRebuild } from "../../packages/data-core/src/site-rebuild.js";
 
 type ManagedService = {
   child: ChildProcess;
   port: number;
   url: string;
+  bootstrapToken?: string;
 };
 
 type LibrarySummary = {
@@ -47,7 +52,10 @@ const desktopAppUserModelId = "com.classical.guide.desktop.note";
 const shellRootDir = path.resolve(__dirname, "../../../../");
 const runtimeRootDir = app.isPackaged ? shellRootDir.replace(`${path.sep}app.asar`, `${path.sep}app.asar.unpacked`) : shellRootDir;
 const launcherHtmlPath = path.resolve(runtimeRootDir, "apps", "desktop", "launcher.html");
-const desktopPreloadPath = path.resolve(shellRootDir, "output", "runtime", "apps", "desktop", "preload.js");
+const desktopPreloadDir = path.resolve(shellRootDir, "output", "runtime", "apps", "desktop");
+const launcherPreloadPath = path.join(desktopPreloadDir, "preload-launcher.js");
+const ownerPreloadPath = path.join(desktopPreloadDir, "preload-owner.js");
+const sitePreloadPath = path.join(desktopPreloadDir, "preload-site.js");
 const desktopAssetDir = path.resolve(shellRootDir, "apps", "desktop", "assets");
 const portableReleaseMarkerPath = app.isPackaged ? path.join(process.resourcesPath, "portable-release.marker") : "";
 const packagedPortableSiteStageDir = path.resolve(shellRootDir, "output", "portable-site-staging");
@@ -83,9 +91,29 @@ let ownerService: ManagedService | null = null;
 let retrievalService: ManagedService | null = null;
 let bootstrapPromise: Promise<LibrarySummary> | null = null;
 let libraryManagerModulePromise: Promise<typeof import("../../packages/data-core/src/library-manager.js")> | null = null;
+let libraryStoreModulePromise: Promise<typeof import("../../packages/data-core/src/library-store.js")> | null = null;
+let localResourceAccessModulePromise: Promise<typeof import("../../packages/data-core/src/local-resource-access.js")> | null = null;
 let siteBuildModulePromise: Promise<typeof import("../../packages/data-core/src/site-build-runner.js")> | null = null;
 let localSiteServerPromise: Promise<LocalSiteServer> | null = null;
 let siteSourceMtimePromise: Promise<number> | null = null;
+// Paths the user explicitly picked in a native dialog; local-resource opening
+// accepts these in addition to paths registered in the active library.
+const recentlyPickedLocalResourcePaths = new Set<string>();
+
+function rememberPickedLocalResourcePath(targetPath: string) {
+  const resolved = path.resolve(String(targetPath || "").trim());
+  if (!resolved) {
+    return resolved;
+  }
+  recentlyPickedLocalResourcePaths.add(resolved);
+  if (recentlyPickedLocalResourcePaths.size > 32) {
+    const oldest = recentlyPickedLocalResourcePaths.values().next().value;
+    if (oldest) {
+      recentlyPickedLocalResourcePaths.delete(oldest);
+    }
+  }
+  return resolved;
+}
 
 if (process.platform === "win32") {
   app.setAppUserModelId(desktopAppUserModelId);
@@ -112,6 +140,9 @@ function primeRuntimeEnvironment() {
   process.env.ICM_RUNTIME_MODE = "bundle";
   process.env.ICM_DEFAULT_LIBRARY_DIR = resolvePreferredDefaultLibraryDir();
   process.env.ICM_SITE_BASE = "/";
+  // Single version source (F08): data-core reads this instead of a hardcoded
+  // APP_VERSION constant, so build metadata always matches the installer.
+  process.env.ICM_APP_VERSION = app.getVersion();
 }
 
 async function migrateLegacyInstalledLibraryIfNeeded() {
@@ -136,6 +167,20 @@ async function loadLibraryManagerModule() {
     libraryManagerModulePromise = import("../../packages/data-core/src/library-manager.js");
   }
   return libraryManagerModulePromise;
+}
+
+async function loadLibraryStoreModule() {
+  if (!libraryStoreModulePromise) {
+    libraryStoreModulePromise = import("../../packages/data-core/src/library-store.js");
+  }
+  return libraryStoreModulePromise;
+}
+
+async function loadLocalResourceAccessModule() {
+  if (!localResourceAccessModulePromise) {
+    localResourceAccessModulePromise = import("../../packages/data-core/src/local-resource-access.js");
+  }
+  return localResourceAccessModulePromise;
 }
 
 async function bootstrapActiveLibraryBundle(options: {
@@ -164,7 +209,13 @@ async function loadSiteBuildModule() {
   return siteBuildModulePromise;
 }
 
-async function buildActiveLibrarySite(options: { includeLocalOnlyLinks?: boolean } = {}) {
+async function buildActiveLibrarySite(
+  options: {
+    buildSource?: "local" | "cli" | "export";
+    includeLocalOnlyLinks?: boolean;
+    siteOutputMode?: "local" | "public";
+  } = {},
+) {
   const siteBuildModule = await loadSiteBuildModule();
   return siteBuildModule.buildLibrarySite(options);
 }
@@ -191,27 +242,37 @@ async function getSiteSourceReferenceMtime() {
   return siteSourceMtimePromise;
 }
 
-async function shouldRebuildLibrarySite(summary: LibrarySummary) {
+async function resolveSiteRebuildState(summary: LibrarySummary) {
   const indexPath = path.join(summary.buildSiteDir, "index.html");
   const metadataPath = path.join(summary.buildSiteDir, ".icm-build-meta.json");
-  let indexStat;
+  let indexMtimeMs: number | null = null;
   try {
-    indexStat = await stat(indexPath);
+    indexMtimeMs = (await stat(indexPath)).mtimeMs;
   } catch {
-    return true;
+    indexMtimeMs = null;
   }
 
+  let metaVersion: string | null = null;
   try {
-    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { appVersion?: string };
-    if (metadata.appVersion !== app.getVersion()) {
-      return true;
-    }
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { appVersion?: unknown };
+    metaVersion = typeof metadata.appVersion === "string" ? metadata.appVersion : null;
   } catch {
-    return true;
+    metaVersion = null;
   }
 
-  const sourceReferenceMtime = await getSiteSourceReferenceMtime();
-  return sourceReferenceMtime > indexStat.mtimeMs;
+  return {
+    metaVersion,
+    appVersion: app.getVersion(),
+    indexMtimeMs,
+    sourceMtimeMs: await getSiteSourceReferenceMtime(),
+  };
+}
+
+async function shouldRebuildLibrarySite(summary: LibrarySummary) {
+  // A 0.1.0 installation carries a seed site whose metadata says 0.1.0. Running
+  // 0.1.1 rebuilds that site exactly once (expected one-time migration cost),
+  // after which the metadata matches and opening the site does not rebuild.
+  return needsSiteRebuild(await resolveSiteRebuildState(summary));
 }
 
 async function getLocalSiteServerInstance() {
@@ -351,6 +412,15 @@ function getAnyDesktopWindow() {
   return BrowserWindow.getFocusedWindow() ?? ownerWindow ?? launcherWindow ?? libraryWindow ?? retrievalWindow ?? undefined;
 }
 
+function createOwnerBootstrapToken() {
+  return randomBytes(32).toString("hex");
+}
+
+function ownerBootstrapUrl(service: Pick<ManagedService, "url" | "bootstrapToken">) {
+  const token = String(service.bootstrapToken || "");
+  return token ? `${service.url}/?bootstrap=${encodeURIComponent(token)}` : service.url;
+}
+
 async function restartOwnerServiceAndWindowSoon() {
   await new Promise((resolve) => setTimeout(resolve, 150));
   if (ownerService) {
@@ -359,11 +429,11 @@ async function restartOwnerServiceAndWindowSoon() {
   }
   if (ownerWindow && !ownerWindow.isDestroyed()) {
     const service = await ensureOwnerService();
-    await ownerWindow.loadURL(service.url);
+    await ownerWindow.loadURL(ownerBootstrapUrl(service));
   }
 }
 
-function createWindow(options: Electron.BrowserWindowConstructorOptions) {
+function createWindow(options: Electron.BrowserWindowConstructorOptions, preloadPath?: string | null) {
   return new BrowserWindow({
     autoHideMenuBar: true,
     backgroundColor: "#efe3cf",
@@ -371,12 +441,39 @@ function createWindow(options: Electron.BrowserWindowConstructorOptions) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // Release S4: renderer processes are sandboxed; preload must only use
+      // the minimal contextBridge/ipcRenderer API exposed below.
+      sandbox: true,
       webSecurity: true,
-      preload: desktopPreloadPath,
+      ...(preloadPath ? { preload: preloadPath } : {}),
     },
     ...options,
   });
+}
+
+// C-F13: each window only receives the bridge it actually needs; the main
+// process additionally verifies every IPC sender against the allowed windows.
+type IpcWindowKind = "launcher" | "owner" | "library";
+function ipcSenderWindowKind(event: Electron.IpcMainInvokeEvent): IpcWindowKind | "retrieval" | null {
+  const sender = event.sender;
+  const matches = (window: BrowserWindow | null) =>
+    Boolean(window && !window.isDestroyed() && window.webContents === sender);
+  if (matches(launcherWindow)) return "launcher";
+  if (matches(ownerWindow)) return "owner";
+  if (matches(libraryWindow)) return "library";
+  if (matches(retrievalWindow)) return "retrieval";
+  return null;
+}
+
+function assertIpcSenderWindow(
+  event: Electron.IpcMainInvokeEvent,
+  allowed: readonly IpcWindowKind[],
+  channel: string,
+): void {
+  const kind = ipcSenderWindowKind(event);
+  if (!kind || kind === "retrieval" || !allowed.includes(kind)) {
+    throw new Error(`IPC channel ${channel} is not allowed from this window`);
+  }
 }
 
 async function pickDirectory(title: string) {
@@ -431,10 +528,13 @@ async function ensureLibraryWindow() {
     libraryWindow.focus();
     return libraryWindow;
   }
-  libraryWindow = createWindow({
-    width: 1400,
-    height: 960,
-  });
+  libraryWindow = createWindow(
+    {
+      width: 1400,
+      height: 960,
+    },
+    sitePreloadPath,
+  );
   libraryWindow.on("closed", () => {
     libraryWindow = null;
   });
@@ -448,7 +548,7 @@ async function openLocalLibrarySite() {
   let summary = await getActiveLibraryBundleSummary();
   if (await shouldRebuildLibrarySite(summary)) {
     writeDesktopLog("openLocalLibrarySite: build missing or stale, triggering Astro build");
-    await buildActiveLibrarySite();
+    await buildActiveLibrarySite({ siteOutputMode: "local", buildSource: "local" });
     summary = await getActiveLibraryBundleSummary();
   }
   const localSiteServer = await getLocalSiteServerInstance();
@@ -472,7 +572,7 @@ async function openPortableLibrarySite() {
   return site.url;
 }
 
-async function ensureOwnerService() {
+async function ensureOwnerService(options: { retrievalServiceUrl?: string } = {}) {
   writeDesktopLog("ensureOwnerService: begin");
   await ensureDesktopRuntimeReady();
   if (ownerService) {
@@ -488,12 +588,15 @@ async function ensureOwnerService() {
 
   const port = await findAvailablePort(4322);
   const summary = await getActiveLibraryBundleSummary();
+  const bootstrapToken = createOwnerBootstrapToken();
   const child = spawn(process.execPath, [ownerServerScriptPath], {
     cwd: getManagedProcessCwd(),
     env: getSharedRuntimeEnv({
       OWNER_PORT: String(port),
       LIBRARY_SITE_PORT: "4331",
       ICM_ACTIVE_LIBRARY_DIR: summary.rootDir,
+      ICM_OWNER_BOOTSTRAP_TOKEN: bootstrapToken,
+      ...(options.retrievalServiceUrl ? { RECORDING_RETRIEVAL_SERVICE_URL: options.retrievalServiceUrl } : {}),
     }),
     stdio: "ignore",
     windowsHide: true,
@@ -501,26 +604,39 @@ async function ensureOwnerService() {
   child.unref();
   const url = `http://127.0.0.1:${port}`;
   await waitForUrl(url);
-  ownerService = { child, port, url };
+  ownerService = { child, port, url, bootstrapToken };
   writeDesktopLog(`ensureOwnerService: ready at ${url}`);
   return ownerService;
 }
 
 async function openOwnerTool() {
-  const service = await ensureOwnerService();
+  // S9/F20: opening the maintenance tool also ensures the retrieval service is
+  // up and passes its actual URL to the owner server.
+  let retrievalServiceUrl: string | undefined;
+  try {
+    const retrieval = await ensureRetrievalService();
+    retrievalServiceUrl = retrieval.url;
+  } catch (error) {
+    writeDesktopLog("openOwnerTool: retrieval service unavailable, using configured fallback", error);
+  }
+  const service = await ensureOwnerService({ retrievalServiceUrl });
+  const bootstrapUrl = ownerBootstrapUrl(service);
   if (ownerWindow && !ownerWindow.isDestroyed()) {
     ownerWindow.focus();
-    await ownerWindow.loadURL(service.url);
+    await ownerWindow.loadURL(bootstrapUrl);
     return service.url;
   }
-  ownerWindow = createWindow({
-    width: 1600,
-    height: 980,
-  });
+  ownerWindow = createWindow(
+    {
+      width: 1600,
+      height: 980,
+    },
+    ownerPreloadPath,
+  );
   ownerWindow.on("closed", () => {
     ownerWindow = null;
   });
-  await ownerWindow.loadURL(service.url);
+  await ownerWindow.loadURL(bootstrapUrl);
   return service.url;
 }
 
@@ -575,10 +691,13 @@ async function openRetrievalTool() {
     await retrievalWindow.loadURL(service.url);
     return service.url;
   }
-  retrievalWindow = createWindow({
-    width: 1460,
-    height: 940,
-  });
+  retrievalWindow = createWindow(
+    {
+      width: 1460,
+      height: 940,
+    },
+    null,
+  );
   retrievalWindow.on("closed", () => {
     retrievalWindow = null;
   });
@@ -587,7 +706,8 @@ async function openRetrievalTool() {
 }
 
 async function createLauncherWindow() {
-  launcherWindow = createWindow({
+  launcherWindow = createWindow(
+    {
     width: 620,
     height: 760,
     minWidth: 620,
@@ -597,36 +717,43 @@ async function createLauncherWindow() {
     resizable: false,
     maximizable: false,
     fullscreenable: false,
-    frame: false,
-    titleBarStyle: "hidden",
-  });
+      frame: false,
+      titleBarStyle: "hidden",
+    },
+    launcherPreloadPath,
+  );
   await launcherWindow.loadFile(launcherHtmlPath);
   launcherWindow.on("closed", () => {
     launcherWindow = null;
   });
 }
 
-ipcMain.handle("launcher:get-library-status", async () => {
+ipcMain.handle("launcher:get-library-status", async (event) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:get-library-status");
   await ensureDesktopRuntimeReady();
   return getActiveLibraryBundleSummary();
 });
 
-ipcMain.handle("launcher:open-library", async () => {
+ipcMain.handle("launcher:open-library", async (event) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "launcher:open-library");
   const url = await openLocalLibrarySite();
   return { url };
 });
 
-ipcMain.handle("launcher:open-owner", async () => {
+ipcMain.handle("launcher:open-owner", async (event) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:open-owner");
   const url = await openOwnerTool();
   return { url };
 });
 
-ipcMain.handle("launcher:open-retrieval", async () => {
+ipcMain.handle("launcher:open-retrieval", async (event) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:open-retrieval");
   const url = await openRetrievalTool();
   return { url };
 });
 
-ipcMain.handle("launcher:import-library", async () => {
+ipcMain.handle("launcher:import-library", async (event) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:import-library");
   await ensureDesktopRuntimeReady();
   const picked = await pickLibrarySource("\u9009\u62e9\u8981\u5bfc\u5165\u7684\u8d44\u6599\u5e93");
   if (picked.canceled || !picked.path) {
@@ -637,7 +764,8 @@ ipcMain.handle("launcher:import-library", async () => {
   return { cancelled: false, ...summary };
 });
 
-ipcMain.handle("launcher:export-library", async (_event, format: "compressed" | "directory" = "compressed") => {
+ipcMain.handle("launcher:export-library", async (event, format: "compressed" | "directory" = "compressed") => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:export-library");
   await ensureDesktopRuntimeReady();
   const picked = await pickDirectory("\u9009\u62e9\u5bfc\u51fa\u76ee\u5f55");
   if (picked.canceled || !picked.path) {
@@ -648,7 +776,8 @@ ipcMain.handle("launcher:export-library", async (_event, format: "compressed" | 
   return { cancelled: false, ...result };
 });
 
-ipcMain.handle("launcher:choose-export-format", async () => {
+ipcMain.handle("launcher:choose-export-format", async (event) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:choose-export-format");
   const options = {
     type: "question" as const,
     title: "选择导出形式",
@@ -663,7 +792,8 @@ ipcMain.handle("launcher:choose-export-format", async () => {
   return { cancelled: result.response === 2, format: result.response === 1 ? "directory" : "compressed" };
 });
 
-ipcMain.handle("launcher:open-library-folder", async () => {
+ipcMain.handle("launcher:open-library-folder", async (event) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:open-library-folder");
   await ensureDesktopRuntimeReady();
   const summary = await getActiveLibraryBundleSummary();
   const error = await shell.openPath(summary.rootDir);
@@ -673,17 +803,52 @@ ipcMain.handle("launcher:open-library-folder", async () => {
   return { rootDir: summary.rootDir };
 });
 
-ipcMain.handle("desktop:open-external", async (_event, target: string) => {
-  await shell.openExternal(target);
+ipcMain.handle("desktop:open-external", async (event, target: string) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:open-external");
+  const normalizedTarget = String(target ?? "").trim();
+  // W3: shell.openExternal must never see file:/javascript:/smb:/... schemes.
+  if (!isAllowedExternalTarget(normalizedTarget)) {
+    throw new Error("Unsupported external link protocol");
+  }
+  await shell.openExternal(normalizedTarget);
 });
 
-ipcMain.handle("desktop:pick-library-folder", async () => {
+ipcMain.handle("desktop:open-local-resource", async (event, target: string) => {
+  assertIpcSenderWindow(event, ["launcher", "owner", "library"], "desktop:open-local-resource");
+  await ensureDesktopRuntimeReady();
+  const summary = await getActiveLibraryBundleSummary();
+  const runtimePaths = getRuntimePaths();
+  const [libraryStore, access] = await Promise.all([loadLibraryStoreModule(), loadLocalResourceAccessModule()]);
+  const library = await libraryStore.loadLibraryFromDisk();
+  const resolvedTarget = await access.resolveAllowedLocalResourceTarget(String(target ?? ""), {
+    libraryRootDir: summary.rootDir,
+    assetsDirs: [runtimePaths.library.assetsDir],
+    contentDirs: [runtimePaths.library.contentLibraryDir, runtimePaths.library.contentSiteDir],
+    registeredLocalPaths: [
+      ...access.collectRegisteredLocalResourcePaths(library),
+      ...recentlyPickedLocalResourcePaths,
+    ],
+  });
+  const openError = await shell.openPath(resolvedTarget);
+  if (openError) {
+    throw new Error(`Failed to open local resource: ${openError}`);
+  }
+  writeDesktopLog(`desktop:open-local-resource: ${resolvedTarget}`);
+  return { opened: true, target: resolvedTarget };
+});
+
+ipcMain.handle("desktop:pick-library-folder", async (event) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:pick-library-folder");
   return pickLibrarySource("\u9009\u62e9\u8d44\u6599\u5e93\u76ee\u5f55\u6216 .icmlibrary \u6587\u4ef6");
 });
 
-ipcMain.handle("desktop:pick-directory", async () => pickDirectory("\u9009\u62e9\u76ee\u6807\u76ee\u5f55"));
+ipcMain.handle("desktop:pick-directory", async (event) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:pick-directory");
+  return pickDirectory("选择目标目录");
+});
 
-ipcMain.handle("desktop:rename-library", async (_event, libraryName: string) => {
+ipcMain.handle("desktop:rename-library", async (event, libraryName: string) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:rename-library");
   await ensureDesktopRuntimeReady();
   const libraryManager = await loadLibraryManagerModule();
   const libraryMeta = await libraryManager.renameActiveLibrary(libraryName);
@@ -692,7 +857,8 @@ ipcMain.handle("desktop:rename-library", async (_event, libraryName: string) => 
   return { renamed: true, libraryMeta };
 });
 
-ipcMain.handle("desktop:activate-library", async (_event, rootDir: string) => {
+ipcMain.handle("desktop:activate-library", async (event, rootDir: string) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:activate-library");
   await ensureDesktopRuntimeReady();
   const libraryManager = await loadLibraryManagerModule();
   const libraryMeta = await libraryManager.activateLibrary(rootDir, { seedFromLegacy: false });
@@ -705,11 +871,17 @@ ipcMain.handle("desktop:activate-library", async (_event, rootDir: string) => {
   return { activated: true, libraryMeta };
 });
 
-ipcMain.handle("desktop:pick-local-resource-file", async () => {
-  return pickFile("\u9009\u62e9\u672c\u5730\u8d44\u6e90\u6587\u4ef6");
+ipcMain.handle("desktop:pick-local-resource-file", async (event) => {
+  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:pick-local-resource-file");
+  const picked = await pickFile("\u9009\u62e9\u672c\u5730\u8d44\u6e90\u6587\u4ef6");
+  if (!picked.canceled && picked.path) {
+    rememberPickedLocalResourcePath(picked.path);
+  }
+  return picked;
 });
 
 ipcMain.handle("launcher:window-control", (event, action: string) => {
+  assertIpcSenderWindow(event, ["launcher"], "launcher:window-control");
   const targetWindow = BrowserWindow.fromWebContents(event.sender);
   if (!targetWindow) {
     return { ok: false };

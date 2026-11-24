@@ -4,8 +4,11 @@ import path from "node:path";
 
 import { normalizeAutomationRun, type AutomationRun, type AutomationSnapshot } from "./automation.js";
 import { defaultLlmConfig, mergeLlmConfigPatch, type LlmConfig } from "./llm.js";
+import { isSecretEnvelope, protectSecret, unprotectSecret } from "./secret-protector.js";
 import type { RecordingRetrievalProviderStatus } from "./recording-retrieval.js";
 import { getRuntimePaths } from "../../data-core/src/app-paths.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "../../data-core/src/atomic-file.js";
+import { resolveAssetUploadDirectory, sanitizeAssetBucket, sanitizeAssetSlug } from "../../data-core/src/asset-upload-policy.js";
 
 function stripUtf8Bom(value: string) {
   return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
@@ -68,7 +71,7 @@ function runPath(runId: string) {
 export async function saveAutomationRun(run: AutomationRun) {
   await ensureAutomationDirs();
   const normalizedRun = normalizeAutomationRun(run);
-  await fs.writeFile(runPath(normalizedRun.id), `${JSON.stringify(normalizedRun, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(runPath(normalizedRun.id), normalizedRun);
   return normalizedRun;
 }
 
@@ -113,13 +116,16 @@ export async function persistRemoteImageAsset(options: {
 
   const bytes = Buffer.from(await response.arrayBuffer());
   const extension = extensionFromUrl(options.sourceUrl);
-  const relativeDir = path.join(options.bucket, sanitizeSegment(options.slug));
-  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(options.sourceUrl)}${extension}`;
+  // W3: allow-listed bucket + resolved containment (defense in depth).
+  const bucket = sanitizeAssetBucket(options.bucket);
+  const slug = sanitizeAssetSlug(options.slug);
   const assetsDir = getRuntimePaths().library.assetsManagedDir;
-  const outputDir = path.join(assetsDir, relativeDir);
+  const outputDir = resolveAssetUploadDirectory(assetsDir, { bucket, slug });
+  const relativeDir = path.relative(assetsDir, outputDir);
+  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(options.sourceUrl)}${extension}`;
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, fileName);
-  await fs.writeFile(outputPath, bytes);
+  await writeFileAtomic(outputPath, bytes);
 
   return `/${path.posix.join("library-assets", "managed", ...relativeDir.split(path.sep), fileName)}`;
 }
@@ -133,13 +139,16 @@ export async function persistUploadedImageAsset(options: {
   await ensureAutomationDirs();
   const sourceName = options.fileName || `${options.slug}.jpg`;
   const extension = path.extname(sourceName).toLowerCase() || ".jpg";
-  const relativeDir = path.join(options.bucket, sanitizeSegment(options.slug));
-  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(`${sourceName}-${Date.now()}`)}${extension}`;
+  // W3: allow-listed bucket + resolved containment (defense in depth).
+  const bucket = sanitizeAssetBucket(options.bucket);
+  const slug = sanitizeAssetSlug(options.slug);
   const assetsDir = getRuntimePaths().library.assetsManagedDir;
-  const outputDir = path.join(assetsDir, relativeDir);
+  const outputDir = resolveAssetUploadDirectory(assetsDir, { bucket, slug });
+  const relativeDir = path.relative(assetsDir, outputDir);
+  const fileName = `${sanitizeSegment(options.slug)}-${hashValue(`${sourceName}-${Date.now()}`)}${extension}`;
   await fs.mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, fileName);
-  await fs.writeFile(outputPath, Buffer.from(options.bytes));
+  await writeFileAtomic(outputPath, Buffer.from(options.bytes));
 
   return `/${path.posix.join("library-assets", "managed", ...relativeDir.split(path.sep), fileName)}`;
 }
@@ -162,18 +171,33 @@ export function findRunSnapshot(run: AutomationRun, snapshotId: string): Automat
 export async function loadLlmConfig() {
   await ensureAutomationDirs();
   const settingsPath = getRuntimePaths().appData.secretsPath;
+  let content: string;
   try {
-    const content = stripUtf8Bom(await fs.readFile(settingsPath, "utf8"));
-    return mergeLlmConfigPatch(defaultLlmConfig, JSON.parse(content) as Partial<LlmConfig>);
+    content = stripUtf8Bom(await fs.readFile(settingsPath, "utf8"));
   } catch {
     return defaultLlmConfig;
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("LLM secret file is corrupted (invalid JSON); refusing plaintext fallback");
+  }
+  if (isSecretEnvelope(parsed)) {
+    const plaintext = await unprotectSecret(parsed);
+    return mergeLlmConfigPatch(defaultLlmConfig, JSON.parse(plaintext) as Partial<LlmConfig>);
+  }
+  // Legacy plaintext file: migrate it to DPAPI before returning the config.
+  const legacyConfig = mergeLlmConfigPatch(defaultLlmConfig, (parsed || {}) as Partial<LlmConfig>);
+  await saveLlmConfig(legacyConfig);
+  return legacyConfig;
 }
 
 export async function saveLlmConfig(config: LlmConfig) {
   await ensureAutomationDirs();
   const settingsPath = getRuntimePaths().appData.secretsPath;
-  await fs.writeFile(settingsPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  const envelope = await protectSecret(JSON.stringify(config));
+  await writeJsonFileAtomic(settingsPath, envelope);
   return config;
 }
 
@@ -201,6 +225,6 @@ export async function saveRecordingRetrievalConfig(config: RecordingRetrievalCon
     ...config,
     expectedProtocolVersion: "v1",
   } satisfies RecordingRetrievalConfig;
-  await fs.writeFile(recordingRetrievalSettingsPath, `${JSON.stringify(nextConfig, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(recordingRetrievalSettingsPath, nextConfig);
   return nextConfig;
 }

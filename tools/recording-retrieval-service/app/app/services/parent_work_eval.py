@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from app.models.protocol import Credit, RetrievalItem, Seed
+
+
+# Standalone RRS checkouts (CI) have no parent project above `app/`; the parent
+# workspace (with data/library/works.json) can be provided explicitly.
+WORKSPACE_ROOT_ENV = "RRS_WORKSPACE_ROOT"
 
 
 REQUESTED_FIELDS = [
@@ -72,11 +78,21 @@ def load_selector_values(*, inline_values: str = "", values_file: str = "") -> l
 
 
 def workspace_root() -> Path:
+    override = os.environ.get(WORKSPACE_ROOT_ENV, "").strip()
+    if override:
+        root = Path(override).expanduser().resolve()
+        if not (root / "data" / "library" / "works.json").exists():
+            raise FileNotFoundError(
+                f"{WORKSPACE_ROOT_ENV} does not point to a parent project root with data/library/works.json: {root}"
+            )
+        return root
     current = Path(__file__).resolve()
     for parent in current.parents:
         if (parent / "data" / "library" / "works.json").exists():
             return parent
-    raise FileNotFoundError("unable to locate parent project data/library root")
+    raise FileNotFoundError(
+        f"unable to locate parent project data/library root; set {WORKSPACE_ROOT_ENV} when running outside the parent repository"
+    )
 
 
 def load_library_json(name: str, base_path: Path | None = None) -> list[dict]:
@@ -85,6 +101,11 @@ def load_library_json(name: str, base_path: Path | None = None) -> list[dict]:
 
 
 def _resolve_eval_target_override_path() -> Path | None:
+    override = os.environ.get(WORKSPACE_ROOT_ENV, "").strip()
+    if override:
+        candidate = Path(override).expanduser().resolve() / "materials" / EVAL_TARGET_OVERRIDE_FILE
+        if candidate.exists():
+            return candidate
     current = Path(__file__).resolve()
     for parent in current.parents:
         candidate = parent / "materials" / EVAL_TARGET_OVERRIDE_FILE

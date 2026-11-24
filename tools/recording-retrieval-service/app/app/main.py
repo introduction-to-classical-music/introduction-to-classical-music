@@ -16,7 +16,7 @@ from urllib.request import urlopen
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.models.protocol import CreateJobRequest, HealthResponse
@@ -32,8 +32,8 @@ from app.services.llm_client import (
 from app.services.orchestrator import JobOrchestrator, TERMINAL_JOB_STATUSES
 from app.services.retrieval import StubRetriever
 from app.services.source_profiles import PersonAliasLoader, ensure_orchestra_alias_file, ensure_person_alias_file
+from app.version import APP_VERSION
 
-APP_VERSION = "0.1.0"
 SERVICE_NAME = "recording-retrieval-service"
 
 
@@ -243,9 +243,34 @@ def handle_existing_service(mode: str, host: str, port: int) -> bool:
     )
 
 
+MAX_JOB_REQUEST_BYTES = 2 * 1024 * 1024
+
+
+def default_log_dir() -> Path:
+    """F19: logs live under the app-data directory, never process cwd."""
+    app_data_dir = str(os.getenv("ICM_APP_DATA_DIR", "")).strip()
+    if app_data_dir:
+        return Path(app_data_dir).resolve() / "retrieval-service" / "logs"
+    return Path(__file__).resolve().parents[1] / "logs"
+
+
 def create_app(*, retriever: StubRetriever | None = None) -> FastAPI:
     app = FastAPI(title="Recording Retrieval Service", version=APP_VERSION)
-    orchestrator = JobOrchestrator(log_dir=Path("logs"), retriever=retriever)
+
+    @app.middleware("http")
+    async def limit_job_request_body(request, call_next):  # type: ignore[no-untyped-def]
+        if request.url.path.startswith("/v1/jobs"):
+            content_length = str(request.headers.get("content-length", "")).strip()
+            if content_length:
+                try:
+                    declared = int(content_length)
+                except ValueError:
+                    return JSONResponse(status_code=400, content={"error": "Invalid Content-Length"})
+                if declared > MAX_JOB_REQUEST_BYTES:
+                    return JSONResponse(status_code=413, content={"error": "Request body too large"})
+        return await call_next(request)
+
+    orchestrator = JobOrchestrator(log_dir=default_log_dir(), retriever=retriever)
     app.state.orchestrator = orchestrator
     llm_config = load_llm_config()
     llm_client = DualModelLlmClient(llm_config) if is_llm_configured(llm_config) else None

@@ -4,6 +4,8 @@ import path from "node:path";
 import { auditEntityVitals } from "../output/runtime/packages/data-core/src/entity-vitals-audit.js";
 import { loadLibraryFromDisk } from "../output/runtime/packages/data-core/src/library-store.js";
 
+// F21: this audit is a gate. Any issue makes the command exit non-zero so
+// `npm run check` and CI fail instead of only printing a JSON report.
 async function main() {
   const library = await loadLibraryFromDisk();
   const result = auditEntityVitals(library);
@@ -16,6 +18,10 @@ async function main() {
     JSON.stringify(
       {
         ...result,
+        gate: {
+          failed: result.issues.length > 0,
+          issueCount: result.issues.length,
+        },
         artifacts: {
           jsonPath,
         },
@@ -24,6 +30,12 @@ async function main() {
       2,
     ),
   );
+  if (result.issues.length > 0) {
+    console.error(`[entity-vitals] ${result.issues.length} issue(s) found; failing the audit gate.`);
+    process.exitCode = 1;
+  } else {
+    process.exitCode = 0;
+  }
 }
 
 main().catch((error) => {

@@ -18,11 +18,11 @@
 ### 4.1 Health
 `GET /health`
 
-最小响应结构：
+最小响应结构（`version` 来自 `app/version.py` 的单一版本源，与 `pyproject.toml` 动态版本一致）：
 ```json
 {
   "service": "recording-retrieval-service",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "protocolVersion": "v1",
   "status": "ok"
 }

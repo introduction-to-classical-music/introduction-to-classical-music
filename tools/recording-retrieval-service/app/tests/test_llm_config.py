@@ -103,7 +103,15 @@ def test_ensure_runtime_llm_config_bootstraps_from_example_file(tmp_path: Path) 
     result_path = ensure_runtime_llm_config(runtime_path=runtime_path, example_path=example_path)
 
     assert result_path == runtime_path
-    assert json.loads(runtime_path.read_text(encoding="utf-8")) == example_payload
+    # C-F07: the persisted file is a DPAPI envelope; the logical payload matches.
+    document = json.loads(runtime_path.read_text(encoding="utf-8"))
+    assert document["schemaVersion"] == "dpapi-v1"
+    assert "ciphertext" in document
+    assert "apiKey" not in runtime_path.read_text(encoding="utf-8")
+    from app.services.llm_client import _read_secret_payload
+
+    decrypted, _migrated = _read_secret_payload(runtime_path)
+    assert decrypted == example_payload
 
 def test_dual_model_client_flags_realtime_capabilities_based_on_fast_model(tmp_path: Path) -> None:
     payload = {

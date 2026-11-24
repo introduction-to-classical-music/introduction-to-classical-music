@@ -1,0 +1,42 @@
+name: RRS CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  offline-pytest:
+    runs-on: windows-latest
+    env:
+      RRS_WORKSPACE_ROOT: ${{ github.workspace }}/parent
+      RRS_PROTOCOL_PATH: ${{ github.workspace }}/parent/tools/recording-retrieval-service/PROTOCOL.md
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout parent project (public data/library for eval tests)
+        uses: actions/checkout@v4
+        with:
+          repository: introduction-to-classical-music/introduction-to-classical-music
+          # Pin the parent checkout so CI cannot silently move with `dev`.
+          # Update this SHA when the RRS protocol/data fixture intentionally
+          # changes; the release checklist records the new SHA.
+          ref: 1db57c064eb4c2bb0f179c7bc03ba05ece94cce2
+          path: parent
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install hash-locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+          python -m pip check
+      - name: Compile check
+        run: python -m compileall -q app
+      - name: Verify parent workspace fixture is available
+        run: |
+          python -c "import os, pathlib; root = pathlib.Path(os.environ['RRS_WORKSPACE_ROOT']); assert (root / 'data' / 'library' / 'works.json').exists(), root"
+          python -c "import os, pathlib; protocol = pathlib.Path(os.environ['RRS_PROTOCOL_PATH']); assert protocol.is_file(), protocol"
+      - name: Offline pytest (network tests excluded)
+        run: python -m pytest -m "not network" -q

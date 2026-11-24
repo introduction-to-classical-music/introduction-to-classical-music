@@ -24,11 +24,13 @@ describe("library bundle scaffolding", () => {
     const { ensureLibraryBundle } = await import("../../packages/data-core/src/library-bundle.ts");
     const result = await ensureLibraryBundle(libraryRoot, { libraryName: "测试库" });
 
+    const packageJson = JSON.parse(await readFile(path.resolve("package.json"), "utf8")) as { version: string };
     const manifest = JSON.parse(await readFile(path.join(libraryRoot, "library.manifest.json"), "utf8"));
     expect(manifest).toMatchObject({
       schemaVersion: "library-bundle-v1",
       libraryName: "测试库",
-      appMinVersion: "0.1.0",
+      // Single version source (F08): the manifest minimum version must match package.json.
+      appMinVersion: packageJson.version,
     });
 
     await expect(stat(path.join(libraryRoot, "content", "library"))).resolves.toBeTruthy();

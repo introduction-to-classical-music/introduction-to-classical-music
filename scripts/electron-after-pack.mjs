@@ -22,6 +22,7 @@ export default async function afterPack(context) {
   await rm(defaultLibraryTarget, { recursive: true, force: true });
   await cp(defaultLibrarySource, defaultLibraryTarget, { recursive: true, force: true });
   await patchWindowsExecutableIcon(context);
+  await patchWindowsVersionInfo(context);
 }
 
 async function patchWindowsExecutableIcon(context) {
@@ -49,6 +50,43 @@ async function patchWindowsExecutableIcon(context) {
     );
   }
 
+  resources.outputResource(exe);
+  await writeFile(executablePath, Buffer.from(exe.generate()));
+}
+
+
+async function patchWindowsVersionInfo(context) {
+  if (context.electronPlatformName !== "win32") {
+    return;
+  }
+
+  const executablePath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.exe`);
+  const appVersion = context.packager.appInfo.version;
+  const executableData = await readFile(executablePath);
+  const exe = ResEdit.NtExecutable.from(executableData);
+  const resources = ResEdit.NtExecutableResource.from(exe);
+  const versionInfoList = ResEdit.Resource.VersionInfo.fromEntries(resources.entries);
+  if (versionInfoList.length === 0) {
+    throw new Error(`No version info resource found in ${executablePath}`);
+  }
+  const versionInfo = versionInfoList[0];
+  const language = versionInfo.getAllLanguagesForStringValues()[0]?.lang ?? 1033;
+  versionInfo.setFileVersion(appVersion, language);
+  versionInfo.setProductVersion(appVersion, language);
+  versionInfo.setStringValues(
+    { lang: language, codepage: 1200 },
+    {
+      FileDescription: "Windows-first desktop edition for building, maintaining, and browsing local classical music libraries.",
+      ProductName: "不全书",
+      ProductVersion: appVersion,
+      FileVersion: appVersion,
+      CompanyName: "Introduction to Classical Music Contributors",
+      LegalCopyright: "Copyright © 2026 Introduction to Classical Music Contributors",
+      OriginalFilename: path.basename(executablePath),
+      InternalName: "buquanshu",
+    },
+  );
+  versionInfo.outputToResourceEntries(resources.entries);
   resources.outputResource(exe);
   await writeFile(executablePath, Buffer.from(exe.generate()));
 }

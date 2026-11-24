@@ -26,6 +26,10 @@ tools/recording-retrieval-service/app/downloads/
 tools/recording-retrieval-service/app/logs/
 tools/recording-retrieval-service/app/output/
 tools/recording-retrieval-service/app/tmp-*/
+# RRS local-only credentials/config (mirror of tools/recording-retrieval-service/app/.gitignore)
+tools/recording-retrieval-service/app/materials/source-profiles/LLM config.txt
+tools/recording-retrieval-service/app/config/*.local.json
+tools/recording-retrieval-service/app/config/*.local.*
 tools/recording-retrieval-service/cache/
 tools/recording-retrieval-service/logs/
 tools/recording-retrieval-service/downloads/
@@ -42,7 +46,4 @@ MANUAL_TEST_CHECKLIST.local.md
 .worktrees/
 .playwright-cli
 
-.planning/**
-!.planning/codebase/
-!.planning/codebase/**
 

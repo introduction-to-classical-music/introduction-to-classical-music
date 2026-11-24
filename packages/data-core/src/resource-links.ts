@@ -1,5 +1,44 @@
 import type { ResourceLink } from "../../shared/src/schema.js";
 
+/**
+ * Output mode for a built site (F15):
+ * - `local`: desktop/owner local site; local resource links stay in the data so
+ *   the Electron layer can open them (W3 replaces the HTTP endpoint with IPC).
+ * - `public`: exported site; local/local-only links are stripped before the
+ *   generated data is written, so no `/__local-resource` URL is ever produced.
+ */
+export type SiteOutputMode = "local" | "public";
+
+export type ResourceLinkOutputOptions = {
+  includeLocalOnly?: boolean;
+  siteOutputMode?: SiteOutputMode;
+};
+
+/**
+ * Resolve the explicit output mode. The safe default is `public`: callers that
+ * serve the site locally must opt in to `local`.
+ */
+export function resolveSiteOutputMode(
+  options: { includeLocalOnlyLinks?: boolean; siteOutputMode?: SiteOutputMode } = {},
+): SiteOutputMode {
+  if (options.siteOutputMode === "local" || options.siteOutputMode === "public") {
+    return options.siteOutputMode;
+  }
+  return options.includeLocalOnlyLinks === true ? "local" : "public";
+}
+
+/**
+ * Resolve whether local/local-only links may be rendered in this output.
+ * Explicit `includeLocalOnly` wins (legacy API); otherwise the mode decides;
+ * the safe default is `false` (public).
+ */
+export function resolveIncludeLocalOnlyLinks(options: ResourceLinkOutputOptions = {}): boolean {
+  if (typeof options.includeLocalOnly === "boolean") {
+    return options.includeLocalOnly;
+  }
+  return options.siteOutputMode === "local";
+}
+
 export type ResourceLinkAuditIssue = {
   code: "invalid-url" | "platform-mismatch" | "title-looks-like-url";
   message: string;
@@ -93,38 +132,63 @@ export function auditResourceLinks(links: ResourceLink[]): ResourceLinkAuditIssu
   return issues;
 }
 
-export function isRenderableResourceLink(link: ResourceLink, options: { includeLocalOnly?: boolean } = {}) {
+export function isLocalOnlyResourceLink(link: ResourceLink): boolean {
   const normalized = normalizeResourceLink(link);
+  return normalized.linkType === "local" || normalized.visibility === "local-only";
+}
+
+/** Number of links that a public site output would strip (local/local-only). */
+export function countLocalOnlyResourceLinks(links: ResourceLink[] = []): number {
+  return links.filter(isLocalOnlyResourceLink).length;
+}
+
+export function isRenderableResourceLink(link: ResourceLink, options: ResourceLinkOutputOptions = {}) {
+  const normalized = normalizeResourceLink(link);
+  // Rendering keeps the legacy permissive default: in local builds the
+  // generated data still carries local links and the components must show
+  // them. Public builds strip local links before the data is written, and can
+  // additionally pass `siteOutputMode: "public"` to be explicit.
+  const includeLocalOnly =
+    typeof options.includeLocalOnly === "boolean"
+      ? options.includeLocalOnly
+      : options.siteOutputMode !== "public";
   if (normalized.linkType === "local") {
-    return options.includeLocalOnly !== false && Boolean(normalized.localPath);
+    return includeLocalOnly && Boolean(normalized.localPath);
   }
-  if (normalized.visibility === "local-only" && options.includeLocalOnly === false) {
-    return false;
+  if (normalized.visibility === "local-only") {
+    return includeLocalOnly && Boolean(normalized.url);
   }
   return Boolean(normalized.url);
 }
 
-export function filterRenderableResourceLinks(links: ResourceLink[], options: { includeLocalOnly?: boolean } = {}) {
+export function filterRenderableResourceLinks(links: ResourceLink[], options: ResourceLinkOutputOptions = {}) {
   return links.map(normalizeResourceLink).filter((link) => isRenderableResourceLink(link, options));
 }
 
-export function sanitizeResourceLinksForSiteOutput(links: ResourceLink[], options: { includeLocalOnly?: boolean } = {}) {
+export function sanitizeResourceLinksForSiteOutput(links: ResourceLink[], options: ResourceLinkOutputOptions = {}) {
+  const includeLocalOnly = resolveIncludeLocalOnlyLinks(options);
   return links
     .map(normalizeResourceLink)
     .filter((link) => {
-      if (options.includeLocalOnly === false && (link.linkType === "local" || link.visibility === "local-only")) {
+      if (!includeLocalOnly && (link.linkType === "local" || link.visibility === "local-only")) {
         return false;
       }
       return Boolean(link.linkType === "local" ? link.localPath : link.url);
     });
 }
 
+
+/**
+ * Presentation for one renderable link.
+ *
+ * Local links no longer receive an HTTP href (the old `/__local-resource`
+ * endpoint was a same-origin side-effect GET and has been removed). The site
+ * renders `data-local-resource-path` and the Electron preload bridge opens the
+ * file over IPC; plain browsers show a "desktop app only" hint.
+ */
 export function getResourceLinkPresentation(link: ResourceLink) {
   const normalized = normalizeResourceLink(link);
-  const href =
-    normalized.linkType === "local"
-      ? `/__local-resource?path=${encodeURIComponent(normalized.localPath || "")}`
-      : normalized.url;
+  const href = normalized.linkType === "local" ? "" : normalized.url;
 
   return {
     href,

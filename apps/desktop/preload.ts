@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld("desktopLauncher", {
   activateLibrary: (rootDir: string) => ipcRenderer.invoke("desktop:activate-library", rootDir),
   openLibraryFolder: () => ipcRenderer.invoke("launcher:open-library-folder"),
   openExternal: (target: string) => ipcRenderer.invoke("desktop:open-external", target),
+  // W3/D3-A: local resource links in the local site are opened over IPC after
+  // the main process validates that the path belongs to the active library.
+  openLocalResource: (target: string) => ipcRenderer.invoke("desktop:open-local-resource", target),
   pickLibraryFolder: () => ipcRenderer.invoke("desktop:pick-library-folder"),
   pickDirectory: () => ipcRenderer.invoke("desktop:pick-directory"),
   pickLocalResourceFile: () => ipcRenderer.invoke("desktop:pick-local-resource-file"),

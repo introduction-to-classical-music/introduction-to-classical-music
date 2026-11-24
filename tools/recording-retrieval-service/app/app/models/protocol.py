@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.version import APP_VERSION
+
 
 def now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -107,7 +109,7 @@ class CreateJobRequest(StrictModel):
 
 class HealthResponse(StrictModel):
     service: Literal["recording-retrieval-service"] = "recording-retrieval-service"
-    version: str = "0.1.0"
+    version: str = APP_VERSION
     protocol_version: Literal["v1"] = Field(default="v1", alias="protocolVersion")
     status: Literal["ok"] = "ok"
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { auditLibraryRoot, hashDirectory, parseCliArgs } from "./lib/library-ops.mjs";
+import { buildReleaseManifest, readSnapshotVersions } from "./lib/library-release.mjs";
 
 const args = parseCliArgs(process.argv.slice(2));
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -21,20 +22,28 @@ if (!audit.ok) {
   throw new Error(`Default library audit failed: ${JSON.stringify(audit.errors)}`);
 }
 
+// F11 / W7a: never publish provenance for a stale build. The snapshot's
+// `.icm-build-meta.json` appVersion must match the release version; pre-W4
+// snapshots recorded 0.1.0 and are rejected with a rebuild hint.
+const { buildMeta, libraryManifest } = await readSnapshotVersions(sourceRoot);
+if (audit.manifest?.libraryId && libraryManifest?.libraryId && audit.manifest.libraryId !== libraryManifest.libraryId) {
+  throw new Error(
+    `Default library manifest mismatch: audit libraryId=${audit.manifest.libraryId} but library.manifest.json=${libraryManifest.libraryId}`,
+  );
+}
+
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(path.dirname(outputRoot), { recursive: true });
 await cp(sourceRoot, outputRoot, { recursive: true, force: true });
 
 const snapshotTree = await hashDirectory(outputRoot, { exclude: ["release-manifest.json"] });
-const manifest = {
-  schemaVersion: "library-release-v1",
-  libraryId: audit.manifest?.libraryId || "",
-  libraryName: audit.manifest?.libraryName || "",
-  appVersion: version,
-  builtAt: new Date().toISOString(),
+const manifest = buildReleaseManifest({
+  version,
+  libraryManifest,
+  buildMeta,
   sourceDigest: audit.sourceDigest,
   snapshotDigest: snapshotTree.digest,
   counts: audit.counts,
-};
+});
 await writeFile(path.join(outputRoot, "release-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 process.stdout.write(`${JSON.stringify({ outputRoot, manifest }, null, 2)}\n`);

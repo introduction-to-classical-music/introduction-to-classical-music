@@ -12,15 +12,29 @@
 
 默认安装后附带的是**空资料库模板**，只包含《不全书使用手册》，不包含测试条目或开发者个人资料。
 
+## Code signing policy / 代码签名政策
+
+Windows 安装包当前未使用代码签名证书；未来获得可信签名后再更新签名策略。
+
+- Committers / reviewers: [@Hektor1277](https://github.com/Hektor1277), [@z1645444](https://github.com/z1645444)
+- Approvers: [@Hektor1277](https://github.com/Hektor1277), [@z1645444](https://github.com/z1645444)
+- Full policy: [CODE-SIGNING-POLICY.md](CODE-SIGNING-POLICY.md)
+- Privacy policy: [PRIVACY.md](PRIVACY.md)
+
+当前 Windows 安装包未使用代码签名证书；未来获得可信签名后会在新版本更新。
+
 ## 当前发布内容
 
 当前公开发布包含三类内容：
 
 ### 1. Windows 安装版
 
+> 代码签名：当前 Windows 安装包未使用代码签名证书；未来获得可信签名后会在新版本更新。请用 SHA256/SBOM 校验或从源码构建。
+
+
 适合绝大多数普通用户。
 
-- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `buquanshu-setup-0.1.1.exe`
+- 在 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases) 下载 `buquanshu-setup-0.1.2.exe`（当前发布；unsigned，见安装说明）
 - 双击安装后即可使用
 - 自带默认空资料库与《不全书使用手册》
 - 首次打开进入桌面启动器
@@ -49,7 +63,7 @@
 ### 方式一：直接安装
 
 1. 打开 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)
-2. 下载 `buquanshu-setup-0.1.1.exe`
+2. 下载 `buquanshu-setup-0.1.2.exe`（当前发布；unsigned，见安装说明）
 3. 双击运行安装程序
 4. 选择安装目录并完成安装
 5. 安装完成后启动 `不全书`
@@ -89,6 +103,8 @@ npm run package:windows
 
 说明：
 
+- `npm run check` 会依次执行文本编码审计、密钥扫描、实体生命体征审计、参考库审计、审计门禁自测、Astro 类型检查与单元测试；任一审计发现问题即以非零退出码失败
+- `npm run build` 生成默认库种子站点（public 模式，不包含本地文件链接）
 - 该命令只做本地打包校验，不会自动发布 GitHub Release
 - 公共 Release 由 GitHub Actions 在推送 `v*` Tag（如 `v0.1.1`）时自动发布
 
@@ -158,9 +174,8 @@ npm run package:windows
 ## 更多文档
 
 - [发布文档索引](docs/release/README.md)
-- [安装说明](docs/release/0.1.1-installation-guide.md)
-- [发布说明](docs/release/0.1.1-release-notes.md)
-- [维护里程碑与后续工作](docs/maintenance/0.1.1-milestone.md)
+- [安装说明](docs/release/0.1.2-installation-guide.md)
+- [发布说明](docs/release/0.1.2-release-notes.md)
 - [发布流程](RELEASING.md)
 - [贡献说明](CONTRIBUTING.md)
 - [安全说明](SECURITY.md)
@@ -172,3 +187,15 @@ npm run package:windows
 - 第三方依赖声明：见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 本项目不会在公共仓库中附带来源不明或版权不清晰的音视频文件、封面图或开发者个人内容包。
+
+## 0.1.2 发布（2026-11-23）
+
+0.1.2 是安全加固与发布工程收口版本。
+
+> **Windows 安装说明**：当前安装包尚未使用代码签名证书，Windows 可能显示“未知发布者 / Windows protected your PC”。请核对 Release 中的 SHA256/SBOM，或从源码构建；正式签名版本将在后续版本发布。
+
+- 安装包：`buquanshu-setup-0.1.2.exe`；依赖例外见 `security/DEPENDENCY-EXCEPTIONS.md`（复审 2026-12-31）。
+- 升级/安装：见 [0.1.2 安装说明](docs/release/0.1.2-installation-guide.md)。
+- 变更：见 [0.1.2 发布说明](docs/release/0.1.2-release-notes.md)。
+
+下载与校验资产见 [Releases](https://github.com/introduction-to-classical-music/introduction-to-classical-music/releases)。

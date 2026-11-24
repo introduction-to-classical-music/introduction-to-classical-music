@@ -60,9 +60,16 @@ describe("local site server", () => {
 
     expect(response.ok).toBe(true);
     expect(html).toContain("<title>Library</title>");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-frame-options")).toBe("DENY");
+    const csp = response.headers.get("content-security-policy") || "";
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).not.toContain("unsafe-eval");
   });
 
-  it("opens local resources through the same-origin bridge route", async () => {
+  it("no longer exposes a same-origin side-effect endpoint for local paths", async () => {
     if (!(await canBindLoopbackPort())) {
       return;
     }
@@ -70,27 +77,19 @@ describe("local site server", () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "classical-local-site-"));
     tempDirs.push(tempRoot);
     const siteRoot = path.join(tempRoot, "build", "site");
-    const mediaPath = path.join(tempRoot, "assets", "sample.mp3");
     await mkdir(siteRoot, { recursive: true });
-    await mkdir(path.dirname(mediaPath), { recursive: true });
     await writeFile(path.join(siteRoot, "index.html"), "<!doctype html><title>Library</title>", "utf8");
-    await writeFile(mediaPath, "sample", "utf8");
 
-    const openedPaths: string[] = [];
     const { createLocalSiteServer } = await import("../../packages/data-core/src/local-site-server.ts");
-    const server = createLocalSiteServer({
-      preferredPort: await getFreeLoopbackPort(),
-      onOpenLocalPath(targetPath) {
-        openedPaths.push(targetPath);
-      },
-    });
+    const server = createLocalSiteServer({ preferredPort: await getFreeLoopbackPort() });
     const started = await server.ensureStarted(siteRoot);
-    const response = await fetch(`${started.url}/__local-resource?path=${encodeURIComponent(mediaPath)}`);
-    const html = await response.text();
+    const response = await fetch(`${started.url}/__local-resource?path=${encodeURIComponent(path.join(tempRoot, "x.mp3"))}`);
+    const body = await response.text();
     await server.stop();
 
-    expect(response.ok).toBe(true);
-    expect(html).toContain("Local resource opened.");
-    expect(openedPaths).toEqual([mediaPath]);
+    // The SPA fallback may serve index.html, but nothing is opened and no
+    // "opened" side effect page exists anymore.
+    expect(body).not.toContain("Local resource opened.");
+    expect(body.toLowerCase()).toContain("<title>library</title>");
   });
 });

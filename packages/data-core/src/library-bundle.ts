@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import AdmZip from "adm-zip";
 
-import { APP_VERSION, LIBRARY_BUNDLE_SCHEMA_VERSION } from "./app-paths.js";
+import { LIBRARY_BUNDLE_SCHEMA_VERSION } from "./app-paths.js";
+import { getAppVersion } from "./app-version.js";
+import { createLibraryCopyFilter, isLibraryInternalStateEntry } from "./library-state-files.js";
 
 export type LibraryBundleManifest = {
   schemaVersion: typeof LIBRARY_BUNDLE_SCHEMA_VERSION;
@@ -69,7 +71,7 @@ export async function ensureLibraryBundle(
       libraryName: options.libraryName || path.basename(resolvedRoot) || "My Library",
       createdAt: now,
       updatedAt: now,
-      appMinVersion: options.appMinVersion || APP_VERSION,
+      appMinVersion: options.appMinVersion || getAppVersion(),
     };
     await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   }
@@ -141,7 +143,12 @@ export async function copyLibraryBundle(sourceRoot: string, targetRoot: string) 
   const resolvedTargetRoot = path.resolve(targetRoot);
   await fs.mkdir(path.dirname(resolvedTargetRoot), { recursive: true });
   await fs.rm(resolvedTargetRoot, { recursive: true, force: true });
-  await fs.cp(resolvedSourceRoot, resolvedTargetRoot, { recursive: true, force: true });
+  // Never export internal state (commit marker, atomic-write leftovers).
+  await fs.cp(resolvedSourceRoot, resolvedTargetRoot, {
+    recursive: true,
+    force: true,
+    filter: createLibraryCopyFilter(resolvedSourceRoot),
+  });
   return ensureLibraryBundle(resolvedTargetRoot);
 }
 
@@ -161,8 +168,16 @@ export async function copyLibrarySourceBundle(sourceRoot: string, targetRoot: st
   await fs.rm(resolvedTargetRoot, { recursive: true, force: true });
   await fs.mkdir(resolvedTargetRoot, { recursive: true });
   await fs.copyFile(manifestSource, path.join(resolvedTargetRoot, "library.manifest.json"));
-  await fs.cp(contentSource, path.join(resolvedTargetRoot, "content"), { recursive: true, force: true });
-  await fs.cp(assetsSource, path.join(resolvedTargetRoot, "assets"), { recursive: true, force: true });
+  await fs.cp(contentSource, path.join(resolvedTargetRoot, "content"), {
+    recursive: true,
+    force: true,
+    filter: createLibraryCopyFilter(contentSource),
+  });
+  await fs.cp(assetsSource, path.join(resolvedTargetRoot, "assets"), {
+    recursive: true,
+    force: true,
+    filter: createLibraryCopyFilter(assetsSource),
+  });
 
   return {
     rootDir: resolvedTargetRoot,
@@ -181,8 +196,12 @@ export async function writeCompressedLibraryPackage(sourceRoot: string, targetFi
   await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
   const archive = new AdmZip();
   archive.addLocalFile(path.join(resolvedSource, "library.manifest.json"));
-  archive.addLocalFolder(path.join(resolvedSource, "content"), "content");
-  archive.addLocalFolder(path.join(resolvedSource, "assets"), "assets");
+  archive.addLocalFolder(path.join(resolvedSource, "content"), "content", (entryPath: string) => {
+    return !isLibraryInternalStateEntry(entryPath);
+  });
+  archive.addLocalFolder(path.join(resolvedSource, "assets"), "assets", (entryPath: string) => {
+    return !isLibraryInternalStateEntry(entryPath);
+  });
   await archive.writeZipPromise(resolvedTarget, { overwrite: true });
   return resolvedTarget;
 }
@@ -203,6 +222,8 @@ export async function withLibraryBundleRoot<T>(sourcePath: string, callback: (ro
       const entryName = entry.entryName.replace(/\\/g, "/");
       if (entryName.startsWith("/") || entryName.split("/").includes("..")) throw new Error(`Unsafe library package entry: ${entryName}`);
       if (!entryName.startsWith("content/") && !entryName.startsWith("assets/") && entryName !== "library.manifest.json") continue;
+      // Legacy packages may still contain internal bookkeeping; never import it.
+      if (isLibraryInternalStateEntry(entryName)) continue;
       if (entry.isDirectory) { await fs.mkdir(path.join(tempRoot, entryName), { recursive: true }); continue; }
       const contents = archive.readFile(entry);
       if (!contents) throw new Error(`Cannot read library package entry: ${entryName}`);
@@ -246,7 +267,12 @@ export async function seedLibraryBundleFromLegacySource(
 
   for (const pair of copyPairs) {
     await fs.mkdir(pair.to, { recursive: true });
-    await fs.cp(pair.from, pair.to, { recursive: true, force: true });
+    // Legacy sources can still carry the old in-content commit marker; skip it.
+    await fs.cp(pair.from, pair.to, {
+      recursive: true,
+      force: true,
+      filter: createLibraryCopyFilter(pair.from),
+    });
   }
 
   return ensureLibraryBundle(libraryRoot, options);
