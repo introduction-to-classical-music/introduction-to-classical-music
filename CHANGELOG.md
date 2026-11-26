@@ -2,6 +2,16 @@
 
 本项目遵循 `SemVer`（语义化版本）。
 
+## [Unreleased]
+
+### Fixed
+
+- 修复 0.1.2 桌面端启动器在 `sandbox: true` 下无法加载 ESM preload 的问题：三个 preload 改为 CommonJS（`.cts` → `.cjs` 构建产物）。此前 `window.desktopLauncher` 静默缺失，导致「打开维护工具 / 导入库 / 导出库 / 打开库目录」全部报 `undefined`。
+
+### Added
+
+- 新增 `npm run test:desktop-preload`：以真实构建产物在 `sandbox: true` 窗口中验证三个 preload bridge 注入成功（同时覆盖 asar 打包场景），并写入 0.1.2 发布 gate。
+
 ## [0.1.1] - 2026-09-19
 
 ### Fixed

@@ -136,7 +136,8 @@
     "generate:sbom": "node scripts/generate-sbom.mjs",
     "audit:release": "node scripts/audit-release-artifact.mjs",
     "release:checksums": "node scripts/write-release-checksums.mjs",
-    "verify:signing": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-signing.ps1"
+    "verify:signing": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-signing.ps1",
+    "test:desktop-preload": "node scripts/smoke-desktop-preload.mjs"
   },
   "dependencies": {
     "@types/markdown-it": "^14.1.2",

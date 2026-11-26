@@ -15,6 +15,7 @@
   "include": [
     "scripts/**/*.ts",
     "apps/desktop/**/*.ts",
+    "apps/desktop/**/*.cts",
     "apps/owner/server/**/*.ts",
     "packages/**/*.ts"
   ],

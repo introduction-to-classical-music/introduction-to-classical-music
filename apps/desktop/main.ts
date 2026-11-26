@@ -53,9 +53,10 @@ const shellRootDir = path.resolve(__dirname, "../../../../");
 const runtimeRootDir = app.isPackaged ? shellRootDir.replace(`${path.sep}app.asar`, `${path.sep}app.asar.unpacked`) : shellRootDir;
 const launcherHtmlPath = path.resolve(runtimeRootDir, "apps", "desktop", "launcher.html");
 const desktopPreloadDir = path.resolve(shellRootDir, "output", "runtime", "apps", "desktop");
-const launcherPreloadPath = path.join(desktopPreloadDir, "preload-launcher.js");
-const ownerPreloadPath = path.join(desktopPreloadDir, "preload-owner.js");
-const sitePreloadPath = path.join(desktopPreloadDir, "preload-site.js");
+// Preload 必须是 CommonJS：沙箱渲染进程不支持 ESM preload（`.cjs` 由 .cts 编译产出）。
+const launcherPreloadPath = path.join(desktopPreloadDir, "preload-launcher.cjs");
+const ownerPreloadPath = path.join(desktopPreloadDir, "preload-owner.cjs");
+const sitePreloadPath = path.join(desktopPreloadDir, "preload-site.cjs");
 const desktopAssetDir = path.resolve(shellRootDir, "apps", "desktop", "assets");
 const portableReleaseMarkerPath = app.isPackaged ? path.join(process.resourcesPath, "portable-release.marker") : "";
 const packagedPortableSiteStageDir = path.resolve(shellRootDir, "output", "portable-site-staging");

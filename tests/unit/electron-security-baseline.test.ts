@@ -21,9 +21,9 @@ describe("Electron security baseline (release S4 + C-F13)", () => {
   });
 
   it("splits the preload bridge per window and keeps the minimal method sets", async () => {
-    const launcher = await readSource("apps/desktop/preload-launcher.ts");
-    const owner = await readSource("apps/desktop/preload-owner.ts");
-    const site = await readSource("apps/desktop/preload-site.ts");
+    const launcher = await readSource("apps/desktop/preload-launcher.cts");
+    const owner = await readSource("apps/desktop/preload-owner.cts");
+    const site = await readSource("apps/desktop/preload-site.cts");
     expect(exposedMethods(launcher)).toEqual([
       "getLibraryStatus", "openLibrary", "openOwner", "openRetrieval", "importLibrary",
       "exportLibrary", "chooseExportFormat", "openLibraryFolder", "windowControl",
@@ -35,18 +35,36 @@ describe("Electron security baseline (release S4 + C-F13)", () => {
     expect(exposedMethods(site)).toEqual(["openLocalResource"]);
     for (const source of [launcher, owner, site]) {
       expect(source).toContain("contextBridge.exposeInMainWorld");
-      expect(source).not.toMatch(/require\(/);
       expect(source).not.toMatch(/process\./);
       expect(source).not.toMatch(/webUtils|shell\.|nodeIntegration/);
     }
   });
 
+  it("keeps preload scripts CommonJS (sandboxed renderers cannot load ESM preloads)", async () => {
+    // 回归用例：0.1.2 把 sandbox 打开后 preload 仍是 ESM，Electron 抛
+    // "Cannot use import statement outside a module"，bridge 静默失效。
+    const sources = await Promise.all([
+      "apps/desktop/preload-launcher.cts",
+      "apps/desktop/preload-owner.cts",
+      "apps/desktop/preload-site.cts",
+    ].map(readSource));
+    for (const source of sources) {
+      expect(source).not.toMatch(/^\s*import\s/m);
+      expect(source).toContain('require("electron")');
+      const requiredModules = [...source.matchAll(/^\s*(?:const|let|var)[^\n]*require\("([^"]+)"\)/gm)].map(
+        (match) => match[1],
+      );
+      expect(requiredModules.length).toBe(1);
+      expect(requiredModules[0]).toBe("electron");
+    }
+  });
+
   it("passes a window-specific preload to each window and none to retrieval", async () => {
     const main = await readSource("apps/desktop/main.ts");
-    expect(main).toContain('path.join(desktopPreloadDir, "preload-launcher.js")');
-    expect(main).toContain('path.join(desktopPreloadDir, "preload-owner.js")');
-    expect(main).toContain('path.join(desktopPreloadDir, "preload-site.js")');
-    expect(main).not.toMatch(/"preload\.js"/);
+    expect(main).toContain('path.join(desktopPreloadDir, "preload-launcher.cjs")');
+    expect(main).toContain('path.join(desktopPreloadDir, "preload-owner.cjs")');
+    expect(main).toContain('path.join(desktopPreloadDir, "preload-site.cjs")');
+    expect(main).not.toMatch(/"preload\.(js|cjs)"/);
     const createWindowCalls = [...main.matchAll(/createWindow\(\s*\{[\s\S]*?\}\s*,\s*([^)]+)?\)/g)];
     expect(createWindowCalls.length).toBeGreaterThanOrEqual(4);
     expect(main).toMatch(/retrievalWindow = createWindow\([\s\S]*?\},\s*null,\s*\);/);

@@ -1,4 +1,5 @@
-import { contextBridge, ipcRenderer } from "electron";
+// Preload 运行在 `sandbox: true` 的渲染进程里，必须是 CommonJS（见 preload-launcher.cts）。
+const { contextBridge, ipcRenderer } = require("electron") as typeof import("electron");
 
 // Owner window bridge (maintenance UI). Deliberately excludes launcher-only
 // window controls and import/export orchestration APIs.
