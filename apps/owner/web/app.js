@@ -99,6 +99,8 @@ const searchType = document.querySelector("#owner-search-type");
 const searchButton = document.querySelector("#owner-search-button");
 const searchResults = document.querySelector("#owner-search-results");
 const searchCount = document.querySelector("#owner-search-count");
+const directoryTitle = document.querySelector("#owner-dir-title");
+const directoryBack = document.querySelector("#owner-dir-back");
 const searchDirectory = document.querySelector("#owner-search-directory");
 const detailPage = document.querySelector("#owner-detail-page");
 const detailPageTitle = document.querySelector("#owner-detail-page-title");
@@ -3743,6 +3745,255 @@ const renderSearchResults = (results, options = {}) => {
   searchResults.innerHTML = sections.join("");
 };
 
+// ---- 三级目录浏览：分类 → 实体 → 作品 → 版本 ------------------------------
+const directoryState = { stack: [] };
+
+const DIR_ROOT_ROWS = [
+  { key: "composers", label: "按作曲家" },
+  { key: "conductors", label: "按指挥" },
+  { key: "soloists", label: "按独奏家" },
+  { key: "ensembles", label: "按乐团 / 组合" },
+];
+
+const dirLibrary = () => state.library || { composers: [], people: [], works: [], recordings: [], workGroups: [] };
+
+const dirPeopleByCategory = (key) => {
+  const people = dirLibrary().people || [];
+  if (key === "conductors") {
+    return people.filter((item) => (item.roles || []).includes("conductor"));
+  }
+  if (key === "soloists") {
+    return people.filter((item) => (item.roles || []).some((role) => ["soloist", "instrumentalist", "singer"].includes(role)));
+  }
+  return people.filter((item) => (item.roles || []).some((role) => ["orchestra", "ensemble", "chorus"].includes(role)));
+};
+
+const dirCount = (key) => (key === "composers" ? (dirLibrary().composers || []).length : dirPeopleByCategory(key).length);
+
+const dirPersonMeta = (person) =>
+  [person.nameLatin, person.country, (person.roles || []).includes("conductor") ? "指挥" : ""].filter(Boolean).join(" / ");
+
+const dirComposerMeta = (composer) => [composer.nameLatin, composer.country].filter(Boolean).join(" / ");
+
+const dirRow = ({ title, meta, push, entity, extra = "" }) => `
+  <div class="owner-dir-row">
+    <button type="button" class="owner-dir-row__main" ${
+      push
+        ? `data-dir-push="${escapeHtml(push)}"`
+        : `data-dir-entity="${escapeHtml(entity || "")}"`
+    }>
+      <span class="owner-directory__title">${escapeHtml(title)}</span>
+      <span class="owner-directory__meta">${escapeHtml(meta || "")}</span>
+    </button>
+    ${push && entity ? `<button type="button" class="owner-dir-row__link" data-dir-entity="${escapeHtml(entity)}">进入条目</button>` : ""}
+    ${extra}
+  </div>`;
+
+const dirWorkGroupPath = (work) => {
+  const groups = (work.groupIds || [])
+    .map((id) => (dirLibrary().workGroups || []).find((group) => group.id === id))
+    .filter(Boolean)
+    .sort((a, b) => (b.path?.length || 0) - (a.path?.length || 0));
+  return groups[0]?.path || [];
+};
+
+const dirRecordingsOfWork = (workId) =>
+  (dirLibrary().recordings || []).filter((item) => item.workId === workId).sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey)));
+
+const dirRecordingsOfPerson = (personId) =>
+  (dirLibrary().recordings || []).filter((item) => (item.credits || []).some((credit) => credit.personId === personId));
+
+const dirRecordingMeta = (recording) =>
+  [recording.performanceDateText, recording.venueText, recording.label].filter(Boolean).join(" / ");
+
+const renderWorkTree = (works) => {
+  const root = { children: new Map(), works: [], count: 0 };
+  for (const work of works) {
+    let node = root;
+    node.count += 1;
+    for (const segment of dirWorkGroupPath(work)) {
+      if (!node.children.has(segment)) {
+        node.children.set(segment, { children: new Map(), works: [], count: 0 });
+      }
+      node = node.children.get(segment);
+      node.count += 1;
+    }
+    node.works.push(work);
+  }
+  const renderNode = (node, depth) => {
+    const parts = [];
+    for (const [segment, child] of node.children) {
+      parts.push(
+        `<p class="owner-directory__subhead owner-directory__subhead--depth${Math.min(depth + 1, 3)}">${escapeHtml(segment)}<span>${child.count} 部</span></p>`,
+      );
+      parts.push(renderNode(child, depth + 1));
+    }
+    parts.push(
+      ...node.works.map((work) =>
+        dirRow({
+          title: [work.title, work.catalogue].filter(Boolean).join(" / "),
+          meta: [work.titleLatin, dirWorkGroupPath(work).join(" / ")].filter(Boolean).join(" · "),
+          push: `work:${work.id}`,
+          entity: `work:${work.id}`,
+        }),
+      ),
+    );
+    return parts.join("");
+  };
+  return renderNode(root, 0);
+};
+
+const dirFindEntity = (kind, id) => {
+  const lib = dirLibrary();
+  if (kind === "composer") return (lib.composers || []).find((item) => item.id === id);
+  if (kind === "person") return (lib.people || []).find((item) => item.id === id);
+  if (kind === "work") return (lib.works || []).find((item) => item.id === id);
+  if (kind === "recording") return (lib.recordings || []).find((item) => item.id === id);
+  return null;
+};
+
+const renderDirectory = () => {
+  const lib = dirLibrary();
+  const stack = directoryState.stack;
+  const top = stack[stack.length - 1];
+  const resultsHost = searchResults;
+  let html = "";
+  let title = "检索目录";
+  let countText = "";
+
+  if (!top) {
+    countText = `${(lib.composers || []).length + (lib.people || []).length} 条索引`;
+    html = DIR_ROOT_ROWS.map((row) =>
+      dirRow({ title: row.label, meta: `${dirCount(row.key)} 位`, push: `group:${row.key}` }),
+    ).join("");
+  } else if (top.kind === "group") {
+    title = DIR_ROOT_ROWS.find((row) => row.key === top.key)?.label || "检索目录";
+    const items =
+      top.key === "composers"
+        ? [...(lib.composers || [])].sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey)))
+        : dirPeopleByCategory(top.key).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh"));
+    countText = `${items.length} 位`;
+    html = items
+      .map((item) =>
+        top.key === "composers"
+          ? dirRow({
+              title: item.name,
+              meta: dirComposerMeta(item),
+              push: `composer:${item.id}`,
+              entity: `composer:${item.id}`,
+            })
+          : dirRow({
+              title: item.name,
+              meta: dirPersonMeta(item),
+              push: `person:${item.id}`,
+              entity: `person:${item.id}`,
+            }),
+      )
+      .join("");
+  } else if (top.kind === "composer") {
+    const composer = dirFindEntity("composer", top.id);
+    const works = (lib.works || []).filter((work) => work.composerId === top.id);
+    title = composer?.name || "作曲家";
+    countText = `${works.length} 部作品`;
+    html = `
+      <div class="owner-dir-headline">
+        <span>${escapeHtml([composer?.nameLatin, composer?.country].filter(Boolean).join(" / "))}</span>
+        <button type="button" data-dir-entity="${escapeHtml(`composer:${top.id}`)}">进入条目</button>
+      </div>` + (works.length ? renderWorkTree(works) : '<p class="owner-empty">该作曲家下暂无作品。</p>');
+  } else if (top.kind === "work") {
+    const work = dirFindEntity("work", top.id);
+    const composer = (lib.composers || []).find((item) => item.id === work?.composerId);
+    const recordings = dirRecordingsOfWork(top.id);
+    title = work?.title || "作品";
+    countText = `${recordings.length} 个版本`;
+    html = `
+      <div class="owner-dir-headline">
+        <span>${escapeHtml([composer?.name, work?.titleLatin, work?.catalogue].filter(Boolean).join(" / "))}</span>
+        <button type="button" data-dir-entity="${escapeHtml(`work:${top.id}`)}">进入条目</button>
+      </div>` +
+      (recordings.length
+        ? recordings
+            .map((recording) =>
+              dirRow({
+                title: recording.title,
+                meta: dirRecordingMeta(recording),
+                entity: `recording:${recording.id}`,
+              }),
+            )
+            .join("")
+        : '<p class="owner-empty">该作品下暂无版本。</p>');
+  } else if (top.kind === "person") {
+    const person = dirFindEntity("person", top.id);
+    const recordings = dirRecordingsOfPerson(top.id);
+    title = person?.name || "人物";
+    countText = `${recordings.length} 个版本`;
+    const grouped = new Map();
+    for (const recording of recordings) {
+      const work = (lib.works || []).find((item) => item.id === recording.workId);
+      const composer = (lib.composers || []).find((item) => item.id === work?.composerId);
+      const key = [composer?.name, work?.title].filter(Boolean).join(" · ") || "未关联作品";
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key).push(recording);
+    }
+    html = `
+      <div class="owner-dir-headline">
+        <span>${escapeHtml(dirPersonMeta(person))}</span>
+        <button type="button" data-dir-entity="${escapeHtml(`person:${top.id}`)}">进入条目</button>
+      </div>` +
+      ([...grouped.entries()]
+        .map(
+          ([groupTitle, rows]) =>
+            `<p class="owner-directory__subhead">${escapeHtml(groupTitle)}</p>` +
+            rows
+              .map((recording) =>
+                dirRow({
+                  title: recording.title,
+                  meta: dirRecordingMeta(recording),
+                  entity: `recording:${recording.id}`,
+                }),
+              )
+              .join(""),
+        )
+        .join("") || '<p class="owner-empty">暂无关联版本。</p>');
+  }
+
+  searchCount.textContent = countText;
+  if (directoryTitle) {
+    directoryTitle.textContent = title;
+  }
+  if (directoryBack) {
+    directoryBack.hidden = stack.length === 0;
+  }
+  resultsHost.innerHTML = html || '<p class="owner-empty">没有条目。</p>';
+};
+
+const dirNavigate = (payload) => {
+  const [kind, ...rest] = String(payload || "").split(":");
+  const id = rest.join(":");
+  if (!kind || !id) {
+    return;
+  }
+  if (kind === "group") {
+    directoryState.stack = [{ kind: "group", key: id }];
+  } else {
+    directoryState.stack.push({ kind, id });
+  }
+  renderDirectory();
+};
+
+const dirOpenEntity = (payload) => {
+  const [kind, ...rest] = String(payload || "").split(":");
+  const id = rest.join(":");
+  if (!kind || !id) {
+    return;
+  }
+  setActiveView("detail");
+  void loadEntity(kind, id);
+};
+
+
 const showSearchDirectory = () => {
   document.body.classList.remove("owner-focus-detail");
   if (searchDirectory) {
@@ -3750,6 +4001,9 @@ const showSearchDirectory = () => {
   }
   if (detailPage) {
     detailPage.hidden = true;
+  }
+  if (searchInput && !compact(searchInput.value)) {
+    renderDirectory();
   }
 };
 
@@ -5370,6 +5624,20 @@ const refreshSelectionPreviewDebounced = (() => {
 })();
 
 searchResults.addEventListener("click", async (event) => {
+  const entityButton = event.target.closest("[data-dir-entity]");
+  if (entityButton) {
+    try {
+      dirOpenEntity(entityButton.dataset.dirEntity);
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+  const pushButton = event.target.closest("[data-dir-push]");
+  if (pushButton) {
+    dirNavigate(pushButton.dataset.dirPush);
+    return;
+  }
   const button = event.target.closest("[data-open-type]");
   if (!button) {
     return;
@@ -5380,6 +5648,11 @@ searchResults.addEventListener("click", async (event) => {
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
   }
+});
+
+directoryBack?.addEventListener("click", () => {
+  directoryState.stack.pop();
+  renderDirectory();
 });
 
 if (detailBackButton) {
@@ -5422,6 +5695,16 @@ document.querySelector("#owner-detail-save")?.addEventListener("click", () => {
   const saveButton = findFormAction(form, "save");
   if (saveButton) {
     saveButton.click();
+  }
+});
+
+document.querySelector("#owner-detail-check")?.addEventListener("click", () => {
+  const panel = document.querySelector("[data-detail-panel]:not([hidden])");
+  const checkButton = panel?.querySelector("[data-entity-check]");
+  if (checkButton) {
+    checkButton.click();
+  } else {
+    setResult("当前条目暂不支持自动检查。");
   }
 });
 
@@ -6253,6 +6536,11 @@ inlineCheckCloseButton.addEventListener("click", () => {
 
 searchButton.addEventListener("click", async () => {
   try {
+    if (!compact(searchInput.value) && !compact(searchType.value)) {
+      directoryState.stack = [];
+      renderDirectory();
+      return;
+    }
     await performSearch();
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
@@ -6900,7 +7188,7 @@ const bootstrap = async () => {
     resetArticleForm();
     setActiveArticleTab("create");
     renderBatchSession();
-    await performSearch();
+    renderDirectory();
     renderJob(null);
     await refreshSelectionPreview();
     setResult("维护工具已就绪。");

@@ -74,12 +74,15 @@
 
             <div class="owner-detail-layout">
               <section class="owner-card owner-card--search" id="owner-search-directory">
-                <div class="owner-card__header">
-                  <h2>检索目录</h2>
+                <div class="owner-card__header owner-directory__header">
+                  <div class="owner-directory__crumbs">
+                    <button type="button" id="owner-dir-back" hidden>&#x2190; &#x4e0a;&#x4e00;&#x7ea7;</button>
+                    <h2 id="owner-dir-title">&#x68c0;&#x7d22;&#x76ee;&#x5f55;</h2>
+                  </div>
                   <div class="owner-directory__tools">
                     <span id="owner-search-count"></span>
                     <div class="owner-create">
-                      <button type="button" id="owner-create-toggle">＋ 新建</button>
+                      <button type="button" id="owner-create-toggle">&#xff0b; &#x65b0;&#x5efa;</button>
                       <div class="owner-create__menu" id="owner-create-menu" hidden>
                         <button type="button" data-create-type="composer">作曲家</button>
                         <button type="button" data-create-type="person">人物</button>
@@ -98,6 +101,7 @@
                   <button type="button" id="owner-detail-back" class="owner-detail-page__back">&#x2190; 返回主界面</button>
                   <span class="owner-detail-page__crumb" id="owner-detail-page-title"></span>
                   <div class="owner-detail-page__actions">
+                    <button type="button" id="owner-detail-check">自动检查</button>
                     <button type="button" id="owner-detail-delete" class="owner-detail-page__action is-danger" hidden>&#x5220;&#x9664;</button>
                     <button type="button" id="owner-detail-save" class="owner-detail-page__action">&#x4fdd;&#x5b58;</button>
                   </div>

@@ -3618,3 +3618,265 @@ body.owner-focus-detail .owner-card--detail .owner-inline-check {
   margin-left: 1rem;
   padding-right: 0;
 }
+
+/* ---- 2026-11 第三轮：填满布局 / 全局无框按钮 / 三级目录 ---- */
+
+/* 页面纵向填满，两个块拉伸到底 */
+.owner-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.owner-hero {
+  flex: 0 0 auto;
+}
+
+.owner-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.owner-panel--main {
+  height: auto;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.owner-panel--sidebar {
+  min-height: 0;
+}
+
+.owner-panel-main-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.owner-card--search,
+.owner-card--detail {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* 条目页占满视口且不出现页面级滚动 */
+body.owner-focus-detail {
+  height: 100vh;
+  overflow: hidden;
+}
+
+body.owner-focus-detail .owner-shell {
+  height: 100vh;
+  min-height: 0;
+  padding-bottom: 0;
+}
+
+body.owner-focus-detail .owner-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.owner-focus-detail .owner-panel--main {
+  height: 100%;
+}
+
+body.owner-focus-detail .owner-panel-main-scroll {
+  height: 100%;
+}
+
+/* 全局无框按钮 */
+button {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+button:hover {
+  color: var(--accent);
+}
+
+button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 三级目录 */
+.owner-directory__crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+#owner-dir-back {
+  font-size: 0.84rem;
+  color: var(--muted);
+  padding: 0 0.2rem;
+}
+
+#owner-dir-back:hover {
+  color: var(--accent);
+}
+
+.owner-directory__header h2 {
+  font-size: 1.12rem;
+  font-weight: 600;
+}
+
+.owner-dir-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.owner-dir-row__main {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1.2rem;
+  padding: 0.6rem 0.2rem;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+}
+
+.owner-dir-row__main:hover {
+  color: var(--text);
+  background: rgba(138, 105, 68, 0.07);
+}
+
+.owner-dir-row__link {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.owner-dir-row__link:hover {
+  color: var(--accent);
+}
+
+.owner-dir-headline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.1rem 0 0.6rem;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.owner-dir-headline button {
+  font-size: 0.82rem;
+}
+
+.owner-directory__subhead {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.owner-directory__subhead span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.owner-directory__subhead--depth2 {
+  padding-left: 0.9rem;
+}
+
+.owner-directory__subhead--depth3 {
+  padding-left: 1.8rem;
+}
+
+/* 条目页：表单内的自动检查工具条已移到顶栏，隐藏避免重复 */
+body.owner-focus-detail .owner-detail-toolbar {
+  display: none;
+}
+
+/* 目录/条目卡片填满主面板 */
+.owner-view[data-view-panel="detail"] {
+  min-height: 0;
+}
+
+.owner-detail-layout {
+  min-height: 0;
+  height: 100%;
+}
+
+.owner-card--search,
+body.owner-focus-detail .owner-card--detail {
+  height: 100%;
+  min-height: 0;
+}
+
+.owner-card--search .owner-result-list {
+  min-height: 0;
+}
+
+/* 高度链：让目录/条目卡片真正填满并内部滚动 */
+.owner-panel-main-scroll {
+  align-content: stretch;
+}
+
+.owner-view[data-view-panel="detail"].is-active {
+  height: 100%;
+  min-height: 0;
+  align-content: stretch;
+}
+
+.owner-detail-layout {
+  height: 100%;
+  min-height: 0;
+}
+
+.owner-card--search,
+.owner-card--detail {
+  height: 100%;
+  min-height: 0;
+}
+
+body.owner-focus-detail .owner-card--detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+body.owner-focus-detail .owner-card--detail .owner-tab-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+body.owner-focus-detail .owner-card--detail .owner-form {
+  min-height: 0;
+}
+
+/* 详情视图用 flex 纵向布局，避免搜索栏与目录之间出现空档 */
+.owner-view[data-view-panel="detail"].is-active {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.owner-view[data-view-panel="detail"] .owner-search-bar {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.owner-view[data-view-panel="detail"] .owner-detail-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
