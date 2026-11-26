@@ -3410,3 +3410,211 @@ body.owner-focus-detail .owner-card--detail {
 body.owner-focus-detail .owner-panel--main {
   height: clamp(30rem, calc(100vh - 22rem), 74rem);
 }
+
+/* ---- 2026-11 第二轮：压缩顶栏 / 调试弹窗 / 条目页顶栏动作 ---- */
+
+.owner-hero {
+  padding: 0.95rem 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.owner-hero__eyebrow {
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.owner-hero h1 {
+  font-size: clamp(1.55rem, 2.6vw, 2.25rem);
+  line-height: 1.12;
+}
+
+.owner-hero__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.owner-hero__status-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.owner-hero__nav {
+  margin-top: 0.5rem;
+  padding-top: 0.55rem;
+}
+
+.owner-hero__nav > button.owner-hero__nav--end {
+  margin-left: auto;
+}
+
+/* 目录头部：计数 + 新建 */
+.owner-directory__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.owner-create {
+  position: relative;
+}
+
+#owner-create-toggle {
+  padding: 0.28rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+#owner-create-toggle:hover {
+  border-color: var(--line-strong);
+  color: var(--accent);
+}
+
+.owner-create__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 30;
+  display: grid;
+  min-width: 8rem;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--panel-strong);
+  box-shadow: 0 18px 40px rgba(64, 44, 19, 0.18);
+}
+
+.owner-create__menu[hidden] {
+  display: none;
+}
+
+.owner-create__menu > button {
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  color: var(--text);
+}
+
+.owner-create__menu > button:hover {
+  background: rgba(138, 105, 68, 0.1);
+  color: var(--text);
+}
+
+/* 条目页顶栏：返回 / 标题 / 保存删除 */
+.owner-detail-page__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.owner-detail-page__action {
+  padding: 0.32rem 1.05rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.owner-detail-page__action:hover {
+  color: var(--accent);
+}
+
+.owner-detail-page__action.is-danger {
+  color: #8a3b2e;
+  border-color: rgba(138, 59, 46, 0.42);
+}
+
+.owner-detail-page__action[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 条目页独占：隐藏顶栏、搜索栏与类型标签，全部空间给条目表单 */
+body.owner-focus-detail .owner-hero,
+body.owner-focus-detail .owner-search-bar,
+body.owner-focus-detail .owner-tabs--inner {
+  display: none;
+}
+
+body.owner-focus-detail .owner-panel--main {
+  height: calc(100vh - 2.6rem);
+  min-height: 0;
+}
+
+body.owner-focus-detail .owner-detail-layout {
+  height: 100%;
+}
+
+body.owner-focus-detail .owner-card--detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+body.owner-focus-detail .owner-card--detail .owner-tab-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+body.owner-focus-detail .owner-card--detail .owner-detail-page__bar,
+body.owner-focus-detail .owner-card--detail .owner-inline-check {
+  flex: 0 0 auto;
+}
+
+/* 调试弹窗 */
+.owner-dialog__card--wide {
+  width: min(56rem, 92vw);
+}
+
+.owner-debug__pre {
+  margin: 0;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--panel-soft);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 顶栏导航行右侧放库状态 */
+.owner-hero__nav > .owner-hero__status-line {
+  margin: 0 0 0 auto;
+  padding: 0;
+  max-width: 55%;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner-hero__nav > .owner-hero__status-line strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.owner-hero__nav > button.owner-hero__nav--end {
+  margin-left: 1rem;
+  padding-right: 0;
+}

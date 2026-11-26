@@ -16,10 +16,6 @@
           <div class="owner-hero__heading">
             <p class="owner-hero__eyebrow">Local Owner Tool</p>
             <h1>&#x7ad9;&#x70b9;&#x7ef4;&#x62a4;&#x63a7;&#x5236;&#x53f0;</h1>
-            <p class="owner-hero__status-line">
-              <strong>&#x5f53;&#x524d;&#x6d3b;&#x52a8;&#x5e93;</strong>
-              <span id="owner-library-status">&#x6b63;&#x5728;&#x8bfb;&#x53d6;&#x5f53;&#x524d;&#x6d3b;&#x52a8;&#x5e93;</span>
-            </p>
           </div>
           <div class="owner-hero__actions">
             <button id="library-import-button" type="button">&#x5bfc;&#x5165;&#x5e93;</button>
@@ -37,6 +33,11 @@
           <button data-view-tab="detail" class="is-active" type="button">搜索与条目</button>
           <button data-view-tab="articles" type="button">专栏</button>
           <button data-view-tab="logs" type="button">日志与回滚</button>
+          <p class="owner-hero__status-line">
+            <strong>&#x5f53;&#x524d;&#x6d3b;&#x52a8;&#x5e93;</strong>
+            <span id="owner-library-status">&#x6b63;&#x5728;&#x8bfb;&#x53d6;&#x5f53;&#x524d;&#x6d3b;&#x52a8;&#x5e93;</span>
+          </p>
+          <button data-debug-toggle type="button" class="owner-hero__nav--end">调试信息</button>
         </nav>
       </header>
 
@@ -75,15 +76,31 @@
               <section class="owner-card owner-card--search" id="owner-search-directory">
                 <div class="owner-card__header">
                   <h2>检索目录</h2>
-                  <span id="owner-search-count"></span>
+                  <div class="owner-directory__tools">
+                    <span id="owner-search-count"></span>
+                    <div class="owner-create">
+                      <button type="button" id="owner-create-toggle">＋ 新建</button>
+                      <div class="owner-create__menu" id="owner-create-menu" hidden>
+                        <button type="button" data-create-type="composer">作曲家</button>
+                        <button type="button" data-create-type="person">人物</button>
+                        <button type="button" data-create-type="group">团体</button>
+                        <button type="button" data-create-type="work">作品</button>
+                        <button type="button" data-create-type="recording">版本</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="owner-result-list" id="owner-search-results"></div>
               </section>
 
               <section class="owner-card owner-card--detail" id="owner-detail-page" hidden>
                 <div class="owner-detail-page__bar">
-                  <button type="button" id="owner-detail-back" class="owner-detail-page__back">&#x2190; 返回目录</button>
+                  <button type="button" id="owner-detail-back" class="owner-detail-page__back">&#x2190; 返回主界面</button>
                   <span class="owner-detail-page__crumb" id="owner-detail-page-title"></span>
+                  <div class="owner-detail-page__actions">
+                    <button type="button" id="owner-detail-delete" class="owner-detail-page__action is-danger" hidden>&#x5220;&#x9664;</button>
+                    <button type="button" id="owner-detail-save" class="owner-detail-page__action">&#x4fdd;&#x5b58;</button>
+                  </div>
                 </div>
                 <div class="owner-tabs owner-tabs--inner">
                   <button data-detail-tab="site" class="is-active" type="button">网站文本</button>
@@ -668,11 +685,20 @@
         </section>
       </section>
 
-      <section class="owner-panel">
-        <h2>结果</h2>
-        <pre id="result-panel">等待操作。</pre>
-      </section>
     </main>
+
+    <dialog id="owner-debug-dialog" class="owner-dialog">
+      <article class="owner-dialog__card owner-dialog__card--wide">
+        <div class="owner-card__header">
+          <h3>调试信息</h3>
+          <button type="button" id="owner-debug-close">关闭</button>
+        </div>
+        <div class="owner-dialog__content">
+          <p class="owner-form__hint">最近一次操作的返回结果与错误信息，仅排查问题时需要查看。</p>
+          <pre id="result-panel" class="owner-debug__pre">等待操作。</pre>
+        </div>
+      </article>
+    </dialog>
 
     <dialog id="owner-text-dialog" class="owner-dialog">
       <article class="owner-dialog__card">

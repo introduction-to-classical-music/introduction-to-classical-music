@@ -3770,13 +3770,9 @@ const entityPageTitle = (entityType, entity) => {
   if (!entity) {
     return "";
   }
-  if (entityType === "site") {
-    return "网站文本";
-  }
-  if (entityType === "recording") {
-    return entity.title || entity.id;
-  }
-  return entity.title || entity.name || entity.id;
+  const label = DETAIL_TYPE_LABELS[entityType] || "";
+  const name = entityType === "recording" ? entity.title || entity.id : entity.title || entity.name || entity.id;
+  return label ? `${label} · ${name}` : name;
 };
 
 const loadEntity = async (entityType, entityId) => {
@@ -3786,6 +3782,7 @@ const loadEntity = async (entityType, entityId) => {
     setActiveDetailTab("site", { preserveLoadedEntity: true });
     clearInlineCheck();
     showDetailPage("网站文本");
+    syncDetailTopActions();
     return;
   }
   const { entity, relatedEntities = [] } = await fetchJson(`/api/entity/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`);
@@ -3803,6 +3800,7 @@ const loadEntity = async (entityType, entityId) => {
   clearInlineCheck();
   setResult({ loaded: entityType, id: entityId });
   showDetailPage(entityPageTitle(entityType, entity));
+  syncDetailTopActions();
 };
 
 const performSearch = async (options = {}) => {
@@ -5389,6 +5387,109 @@ if (detailBackButton) {
     showSearchDirectory();
   });
 }
+
+// ---- 条目页顶栏动作（保存 / 删除）与新建入口 ------------------------------
+const DETAIL_TYPE_LABELS = {
+  composer: "作曲家",
+  person: "人物",
+  group: "团体",
+  work: "作品",
+  recording: "版本",
+  site: "网站文本",
+};
+
+const activeDetailForm = () =>
+  document.querySelector("[data-detail-panel]:not([hidden]) [data-entity-form], [data-detail-panel]:not([hidden]) [data-site-form]");
+
+const findFormAction = (form, action) =>
+  form ? form.querySelector(`[data-action="${action}"], [data-site-action="${action}"]`) : null;
+
+const syncDetailTopActions = () => {
+  const form = activeDetailForm();
+  const saveButton = document.querySelector("#owner-detail-save");
+  const deleteButton = document.querySelector("#owner-detail-delete");
+  if (!saveButton || !deleteButton) {
+    return;
+  }
+  const formSave = findFormAction(form, "save");
+  const formDelete = findFormAction(form, "delete");
+  saveButton.disabled = !formSave;
+  deleteButton.hidden = !formDelete || formDelete.hidden;
+};
+
+document.querySelector("#owner-detail-save")?.addEventListener("click", () => {
+  const form = activeDetailForm();
+  const saveButton = findFormAction(form, "save");
+  if (saveButton) {
+    saveButton.click();
+  }
+});
+
+document.querySelector("#owner-detail-delete")?.addEventListener("click", () => {
+  const form = activeDetailForm();
+  const deleteButton = findFormAction(form, "delete");
+  if (deleteButton) {
+    deleteButton.click();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest('[data-action="save"],[data-action="delete"],[data-action="reset"],[data-site-action="save"]');
+  if (!button) {
+    return;
+  }
+  window.setTimeout(syncDetailTopActions, 900);
+});
+
+const openCreatePage = (type) => {
+  const tab = type === "group" ? "group" : type;
+  setActiveDetailTab(tab, { panel: type === "group" ? "person" : undefined });
+  const formKey = type === "group" ? "person" : type;
+  const form = document.querySelector(`[data-entity-form="${formKey}"]`);
+  const resetButton = form?.querySelector('[data-action="reset"]');
+  if (resetButton) {
+    resetButton.click();
+  }
+  showDetailPage(`新建${DETAIL_TYPE_LABELS[type] || "条目"}`);
+  syncDetailTopActions();
+};
+
+const createToggle = document.querySelector("#owner-create-toggle");
+const createMenu = document.querySelector("#owner-create-menu");
+if (createToggle && createMenu) {
+  createToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    createMenu.hidden = !createMenu.hidden;
+  });
+  document.addEventListener("click", (event) => {
+    if (!createMenu.hidden && !createMenu.contains(event.target) && event.target !== createToggle) {
+      createMenu.hidden = true;
+    }
+  });
+  createMenu.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-create-type]");
+    if (!button) {
+      return;
+    }
+    createMenu.hidden = true;
+    try {
+      openCreatePage(button.dataset.createType);
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
+
+// ---- 调试信息弹窗 ----------------------------------------------------------
+const debugDialog = document.querySelector("#owner-debug-dialog");
+document.querySelectorAll("[data-debug-toggle]").forEach((button) => {
+  button.addEventListener("click", () => {
+    debugDialog?.showModal();
+  });
+});
+document.querySelector("#owner-debug-close")?.addEventListener("click", () => {
+  debugDialog?.close();
+});
 
 issuesPanel.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-issue-entity-type]");
