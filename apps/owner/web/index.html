@@ -33,6 +33,11 @@
             <button id="refresh-button" type="button">&#x5237;&#x65b0;&#x6570;&#x636e;</button>
           </div>
         </div>
+        <nav class="owner-hero__nav" aria-label="维护工具视图">
+          <button data-view-tab="detail" class="is-active" type="button">搜索与条目</button>
+          <button data-view-tab="articles" type="button">专栏</button>
+          <button data-view-tab="logs" type="button">日志与回滚</button>
+        </nav>
       </header>
 
       <section class="owner-grid">
@@ -50,14 +55,6 @@
         </aside>
 
         <section class="owner-panel owner-panel--main">
-          <div class="owner-tabs">
-            <button data-view-tab="detail" class="is-active" type="button">搜索与详情</button>
-            <button data-view-tab="checks" type="button">自动检查</button>
-            <button data-view-tab="review" type="button">候选审查</button>
-            <button data-view-tab="batch" type="button">批量更新</button>
-            <button data-view-tab="articles" type="button">专栏</button>
-            <button data-view-tab="logs" type="button">日志与回滚</button>
-          </div>
           <div class="owner-panel-main-scroll">
 
           <section class="owner-view is-active" data-view-panel="detail">
@@ -75,15 +72,19 @@
             </div>
 
             <div class="owner-detail-layout">
-              <section class="owner-card owner-card--search">
+              <section class="owner-card owner-card--search" id="owner-search-directory">
                 <div class="owner-card__header">
-                  <h2>搜索结果</h2>
+                  <h2>检索目录</h2>
                   <span id="owner-search-count"></span>
                 </div>
                 <div class="owner-result-list" id="owner-search-results"></div>
               </section>
 
-              <section class="owner-card owner-card--detail">
+              <section class="owner-card owner-card--detail" id="owner-detail-page" hidden>
+                <div class="owner-detail-page__bar">
+                  <button type="button" id="owner-detail-back" class="owner-detail-page__back">&#x2190; 返回目录</button>
+                  <span class="owner-detail-page__crumb" id="owner-detail-page-title"></span>
+                </div>
                 <div class="owner-tabs owner-tabs--inner">
                   <button data-detail-tab="site" class="is-active" type="button">网站文本</button>
                   <button data-detail-tab="composer" type="button">作曲家</button>

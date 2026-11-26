@@ -661,7 +661,7 @@ function entityCollectionByType(library, entityType) {
   return library.recordings;
 }
 
-function buildSearchResults(library, site, query, type) {
+function buildSearchResults(library, site, query, type, limit = 100) {
   const normalizedQuery = String(query || "").trim().toLowerCase();
   const composerById = new Map((library.composers || []).map((item) => [item.id, item]));
   const makeKeywords = (values) =>
@@ -686,6 +686,30 @@ function buildSearchResults(library, site, query, type) {
   };
   const buckets = [
     ["site", [{ id: "site", title: site.title, subtitle: site.subtitle || site.description || "", type: "site", searchBucket: "site" }]],
+    [
+      "composer",
+      (library.composers || []).map((item) => {
+        const display = getDisplayData(item);
+        const websiteDisplay = getWebsiteDisplay(item);
+        return {
+          id: item.id,
+          title: websiteDisplay.heading,
+          subtitle: [websiteDisplay.short, item.nameLatin || display.latin, getCountryText(item)].filter(Boolean).join(" / "),
+          type: "composer",
+          searchBucket: "composer",
+          roles: item.roles && item.roles.length ? item.roles : ["composer"],
+          keywords: makeKeywords([
+            display.primary,
+            display.full,
+            display.latin,
+            item.name,
+            item.nameLatin,
+            item.aliases,
+            getCountryText(item),
+          ]),
+        };
+      }),
+    ],
     [
       "person",
       library.people.map((item) => {
@@ -724,6 +748,9 @@ function buildSearchResults(library, site, query, type) {
             subtitle: [composerDisplay, composer?.nameLatin && composer?.nameLatin !== composerDisplay ? composer.nameLatin : ""].filter(Boolean).join(" / "),
             type: "work",
             searchBucket: "work",
+            composerId: composer?.id || "",
+            composerTitle: composerDisplay,
+            composerLatin: composer?.nameLatin || "",
             roles: [],
             keywords: makeKeywords([item.title, item.titleLatin, item.catalogue, item.aliases, composerDisplay, composer?.nameLatin]),
           };
@@ -743,6 +770,10 @@ function buildSearchResults(library, site, query, type) {
               .join(" / "),
             type: "recording",
             searchBucket: "recording",
+            workId: work?.id || "",
+            workTitle: work?.title || "",
+            composerId: composer?.id || "",
+            composerTitle: composer ? getWebsiteDisplay(composer).heading : "",
             roles: [],
             keywords: makeKeywords([
               title,
@@ -766,7 +797,7 @@ function buildSearchResults(library, site, query, type) {
     .flatMap(([, entries]) => entries)
     .filter((entry) => matchesRequestedType(entry))
     .filter((entry) => !normalizedQuery || [entry.title, entry.subtitle, ...(entry.keywords || [])].join(" ").toLowerCase().includes(normalizedQuery))
-    .slice(0, 100);
+    .slice(0, Math.min(Math.max(Number(limit) || 100, 1), 5000));
 }
 
 function buildLegacyRelatedEntityReference(library, entityType, entity) {
@@ -1240,7 +1271,7 @@ app.get("/api/search", async (request, response) => {
   try {
     const [library, site] = await Promise.all([loadLibraryFromDisk(), loadSiteConfig()]);
     response.json({
-      results: buildSearchResults(library, site, String(request.query.q || ""), String(request.query.type || "")),
+      results: buildSearchResults(library, site, String(request.query.q || ""), String(request.query.type || ""), Number(request.query.limit)),
     });
   } catch (error) {
     response.status(500).json({ error: error instanceof Error ? error.message : String(error) });

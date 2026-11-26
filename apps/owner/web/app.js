@@ -99,6 +99,10 @@ const searchType = document.querySelector("#owner-search-type");
 const searchButton = document.querySelector("#owner-search-button");
 const searchResults = document.querySelector("#owner-search-results");
 const searchCount = document.querySelector("#owner-search-count");
+const searchDirectory = document.querySelector("#owner-search-directory");
+const detailPage = document.querySelector("#owner-detail-page");
+const detailPageTitle = document.querySelector("#owner-detail-page-title");
+const detailBackButton = document.querySelector("#owner-detail-back");
 const batchFileInput = document.querySelector("#batch-file-input");
 const batchFileStatus = document.querySelector("#batch-file-status");
 const batchProgressStatus = document.querySelector("#batch-progress-status");
@@ -1131,7 +1135,15 @@ const setActiveArticleTab = (tabName) => {
   });
 };
 
-viewTabs.forEach((button) => button.addEventListener("click", () => setActiveView(button.dataset.viewTab)));
+viewTabs.forEach((button) =>
+  button.addEventListener("click", () => {
+    const viewName = button.dataset.viewTab;
+    setActiveView(viewName);
+    if (viewName === "detail") {
+      showSearchDirectory();
+    }
+  }),
+);
 detailTabs.forEach((button) => button.addEventListener("click", () => setActiveDetailTab(button.dataset.detailTab)));
 articleTabs.forEach((button) => button.addEventListener("click", () => setActiveArticleTab(button.dataset.articleTab)));
 
@@ -3641,22 +3653,130 @@ const renderInlineCheckJob = async (job) => {
     </section>`;
 };
 
-const renderSearchResults = (results) => {
+const SEARCH_DIRECTORY_GROUPS = [
+  { key: "composer", label: "作曲家" },
+  { key: "work", label: "作品" },
+  { key: "recording", label: "版本" },
+  { key: "person", label: "人物" },
+  { key: "group", label: "团体" },
+  { key: "site", label: "网站文本" },
+];
+
+const buildDirectoryRow = (item) => `
+  <button
+    type="button"
+    class="owner-directory__row"
+    data-open-type="${escapeHtml(item.type)}"
+    data-open-id="${escapeHtml(item.id)}"
+    data-open-title="${escapeHtml(item.title)}"
+  >
+    <span class="owner-directory__title">${escapeHtml(item.title)}</span>
+    <span class="owner-directory__meta">${escapeHtml(item.subtitle || "")}</span>
+  </button>`;
+
+const renderSearchResults = (results, options = {}) => {
   searchCount.textContent = `${results.length} 条`;
-  searchResults.innerHTML =
-    results
-      .map(
-        (item) => `
-          <article class="owner-result-item">
-            <div class="owner-result-item__badges">${buildSearchResultBadges(item)
-              .map((badge) => `<span class="owner-pill">${escapeHtml(badge)}</span>`)
-              .join("")}</div>
-            <h3>${escapeHtml(item.title)}</h3>
-            ${item.subtitle ? `<p class="owner-result-item__subtitle">${escapeHtml(item.subtitle)}</p>` : ""}
-            <button type="button" data-load-type="${escapeHtml(item.type)}" data-load-id="${escapeHtml(item.id)}">载入详情</button>
-          </article>`,
-      )
-      .join("") || '<p class="owner-empty">没有匹配条目。</p>';
+  if (!results.length) {
+    const emptyText = options.query === undefined ? "正在载入目录…" : "没有匹配条目。";
+    searchResults.innerHTML = `<p class="owner-empty">${emptyText}</p>`;
+    return;
+  }
+  const byBucket = new Map();
+  for (const item of results) {
+    const bucket = item.type === "person" ? (item.searchBucket === "group" ? "group" : "person") : item.type;
+    if (!byBucket.has(bucket)) {
+      byBucket.set(bucket, []);
+    }
+    byBucket.get(bucket).push(item);
+  }
+  const sections = [];
+  for (const { key, label } of SEARCH_DIRECTORY_GROUPS) {
+    const items = byBucket.get(key);
+    if (!items || !items.length) {
+      continue;
+    }
+    let body = "";
+    if (key === "work") {
+      const groups = new Map();
+      for (const item of items) {
+        const groupTitle = item.composerTitle || "未关联作曲家";
+        if (!groups.has(groupTitle)) {
+          groups.set(groupTitle, []);
+        }
+        groups.get(groupTitle).push(item);
+      }
+      body = [...groups.entries()]
+        .map(
+          ([groupTitle, rows]) => `
+            <p class="owner-directory__subhead">${escapeHtml(groupTitle)}</p>
+            ${rows.map(buildDirectoryRow).join("")}`,
+        )
+        .join("");
+    } else if (key === "recording") {
+      const groups = new Map();
+      for (const item of items) {
+        const groupTitle = [item.composerTitle, item.workTitle].filter(Boolean).join(" · ") || "未关联作品";
+        if (!groups.has(groupTitle)) {
+          groups.set(groupTitle, []);
+        }
+        groups.get(groupTitle).push(item);
+      }
+      body = [...groups.entries()]
+        .map(
+          ([groupTitle, rows]) => `
+            <p class="owner-directory__subhead">${escapeHtml(groupTitle)}</p>
+            ${rows.map(buildDirectoryRow).join("")}`,
+        )
+        .join("");
+    } else {
+      body = items.map(buildDirectoryRow).join("");
+    }
+    sections.push(`
+      <section class="owner-directory__group">
+        <div class="owner-directory__head">
+          <h3>${label}</h3>
+          <span>${items.length} 条</span>
+        </div>
+        ${body}
+      </section>`);
+  }
+  searchResults.innerHTML = sections.join("");
+};
+
+const showSearchDirectory = () => {
+  document.body.classList.remove("owner-focus-detail");
+  if (searchDirectory) {
+    searchDirectory.hidden = false;
+  }
+  if (detailPage) {
+    detailPage.hidden = true;
+  }
+};
+
+const showDetailPage = (title) => {
+  if (detailPageTitle) {
+    detailPageTitle.textContent = title || "";
+  }
+  if (searchDirectory) {
+    searchDirectory.hidden = true;
+  }
+  if (detailPage) {
+    detailPage.hidden = false;
+  }
+  document.body.classList.add("owner-focus-detail");
+};
+
+const entityPageTitle = (entityType, entity) => {
+  if (!entity) {
+    return "";
+  }
+  if (entityType === "site") {
+    return "网站文本";
+  }
+  if (entityType === "recording") {
+    return entity.title || entity.id;
+  }
+  return entity.title || entity.name || entity.id;
 };
 
 const loadEntity = async (entityType, entityId) => {
@@ -3665,6 +3785,7 @@ const loadEntity = async (entityType, entityId) => {
     state.activeEntity = { type: "site", id: "site" };
     setActiveDetailTab("site", { preserveLoadedEntity: true });
     clearInlineCheck();
+    showDetailPage("网站文本");
     return;
   }
   const { entity, relatedEntities = [] } = await fetchJson(`/api/entity/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`);
@@ -3681,9 +3802,10 @@ const loadEntity = async (entityType, entityId) => {
   });
   clearInlineCheck();
   setResult({ loaded: entityType, id: entityId });
+  showDetailPage(entityPageTitle(entityType, entity));
 };
 
-const performSearch = async () => {
+const performSearch = async (options = {}) => {
   const query = compact(searchInput.value);
   const type = compact(searchType.value);
   const params = new URLSearchParams();
@@ -3693,8 +3815,11 @@ const performSearch = async () => {
   if (type) {
     params.set("type", type);
   }
+  const limit = options.limit || (query || type ? 200 : 5000);
+  params.set("limit", String(limit));
   const { results } = await fetchJson(`/api/search?${params.toString()}`);
-  renderSearchResults(results);
+  renderSearchResults(results, { query });
+  return results;
 };
 
 const renderSelectionPreview = () => {
@@ -5247,16 +5372,23 @@ const refreshSelectionPreviewDebounced = (() => {
 })();
 
 searchResults.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-load-type]");
+  const button = event.target.closest("[data-open-type]");
   if (!button) {
     return;
   }
   try {
-    await loadEntity(button.dataset.loadType, button.dataset.loadId);
+    setActiveView("detail");
+    await loadEntity(button.dataset.openType, button.dataset.openId);
   } catch (error) {
     setResult(error instanceof Error ? error.message : String(error));
   }
 });
+
+if (detailBackButton) {
+  detailBackButton.addEventListener("click", () => {
+    showSearchDirectory();
+  });
+}
 
 issuesPanel.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-issue-entity-type]");
@@ -6667,7 +6799,7 @@ const bootstrap = async () => {
     resetArticleForm();
     setActiveArticleTab("create");
     renderBatchSession();
-    renderSearchResults([]);
+    await performSearch();
     renderJob(null);
     await refreshSelectionPreview();
     setResult("维护工具已就绪。");

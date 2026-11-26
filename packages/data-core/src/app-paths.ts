@@ -2,7 +2,13 @@ import os from "node:os";
 import path from "node:path";
 
 export const LIBRARY_BUNDLE_SCHEMA_VERSION = "library-bundle-v1";
-export const APP_DISPLAY_NAME = "Introduction to Classical Music";
+// 应用数据目录名必须与桌面端实际使用的 `app.getPath("userData")` 一致
+// （Electron 取 package.json 的 `name`，即 buquanshu）。桌面端会把
+// `ICM_APP_DATA_DIR` 显式注入子进程；这里只是无头/开发运行的兜底默认值，
+// 两边取同一个名字，避免出现两个 AppData 根目录、各自看到不同的库。
+export const APP_DATA_DIR_NAME = "buquanshu";
+/** @deprecated 保留旧名以避免外部脚本 import 断裂；值已与桌面端统一。 */
+export const APP_DISPLAY_NAME = APP_DATA_DIR_NAME;
 // The app version is no longer a constant here: use `getAppVersion()` from
 // `app-version.ts` (env injected by the desktop process, else package.json).
 
@@ -54,7 +60,7 @@ export function resolveDevelopmentAppDataRoot(repoRoot = resolveRepoRoot()) {
 
 function resolveDefaultAppDataRoot() {
   const appDataBase = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
-  return path.join(appDataBase, APP_DISPLAY_NAME);
+  return path.join(appDataBase, APP_DATA_DIR_NAME);
 }
 
 export function getRuntimePaths(): RuntimePaths {
