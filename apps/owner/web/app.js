@@ -101,6 +101,10 @@ const searchResults = document.querySelector("#owner-search-results");
 const searchCount = document.querySelector("#owner-search-count");
 const directoryTitle = document.querySelector("#owner-dir-title");
 const directoryBack = document.querySelector("#owner-dir-back");
+const directoryFilters = document.querySelector("#owner-dir-filters");
+const directoryCountry = document.querySelector("#owner-dir-country");
+const directoryDecade = document.querySelector("#owner-dir-decade");
+const directoryRail = document.querySelector("#owner-dir-rail");
 const searchDirectory = document.querySelector("#owner-search-directory");
 const detailPage = document.querySelector("#owner-detail-page");
 const detailPageTitle = document.querySelector("#owner-detail-page-title");
@@ -3746,7 +3750,8 @@ const renderSearchResults = (results, options = {}) => {
 };
 
 // ---- 三级目录浏览：分类 → 实体 → 作品 → 版本 ------------------------------
-const directoryState = { stack: [] };
+const directoryState = { stack: [], country: "", decade: "" };
+let directoryRailLetters = [];
 
 const DIR_ROOT_ROWS = [
   { key: "composers", label: "按作曲家" },
@@ -3788,6 +3793,141 @@ const dirRow = ({ title, meta, push, entity, extra = "" }) => `
     ${push && entity ? `<button type="button" class="owner-dir-row__link" data-dir-entity="${escapeHtml(entity)}">进入条目</button>` : ""}
     ${extra}
   </div>`;
+
+const dirWorkTitle = (work) => [work.title, work.catalogue].filter(Boolean).join(" · ");
+
+const dirWorkMeta = (work) => [work.titleLatin, dirWorkGroupPath(work).join(" / ")].filter(Boolean).join(" · ");
+
+const dirCreditNames = (recording, roles) =>
+  (recording.credits || [])
+    .filter((credit) => roles.includes(credit.role))
+    .map((credit) => credit.displayName)
+    .filter(Boolean);
+
+const dirRecordingDisplayTitle = (recording) => {
+  const conductors = dirCreditNames(recording, ["conductor"]);
+  const soloists = dirCreditNames(recording, ["soloist", "instrumentalist", "singer"]);
+  const ensembles = dirCreditNames(recording, ["orchestra", "ensemble", "chorus"]);
+  const year = String(recording.performanceDateText || "").match(/\d{4}/)?.[0] || "";
+  const parts = [];
+  if (conductors.length) {
+    parts.push(conductors.join("、"));
+  }
+  if (soloists.length) {
+    parts.push(soloists.join("、"));
+  }
+  if (ensembles.length) {
+    parts.push(ensembles.join("、"));
+  }
+  if (year) {
+    parts.push(year);
+  }
+  return parts.join(" · ") || recording.title || recording.id;
+};
+
+const dirItemCountries = (item) => {
+  const values = Array.isArray(item.countries) && item.countries.length ? item.countries : [item.country];
+  return values.map((value) => String(value || "").trim()).filter(Boolean);
+};
+
+const dirInitial = (item) => {
+  const latin = String(item.nameLatin || "").trim();
+  const letter = latin ? latin[0].toUpperCase() : "";
+  return /[A-Z]/.test(letter) ? letter : "#";
+};
+
+const dirSourceItems = (key) =>
+  key === "composers" ? [...(dirLibrary().composers || [])] : dirPeopleByCategory(key);
+
+const dirFilteredItems = (key) =>
+  dirSourceItems(key)
+    .filter((item) => {
+      if (directoryState.country && !dirItemCountries(item).includes(directoryState.country)) {
+        return false;
+      }
+      if (directoryState.decade) {
+        const year = Number(item.birthYear || 0);
+        if (!year || String(Math.floor(year / 10) * 10) !== directoryState.decade) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .sort((a, b) => String(a.nameLatin || a.name || "").localeCompare(String(b.nameLatin || b.name || "")));
+
+const fillDirectorySelect = (select, values, label, current) => {
+  if (!select) {
+    return;
+  }
+  select.innerHTML =
+    `<option value="">${label}</option>` +
+    values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+  select.value = values.includes(current) ? current : "";
+};
+
+const populateDirectoryFilters = (key) => {
+  const source = dirSourceItems(key);
+  const countries = [...new Set(source.flatMap(dirItemCountries))].sort((a, b) => a.localeCompare(b));
+  const decades = [
+    ...new Set(
+      source
+        .map((item) => Number(item.birthYear || 0))
+        .filter((year) => year > 0)
+        .map((year) => String(Math.floor(year / 10) * 10)),
+    ),
+  ].sort();
+  fillDirectorySelect(directoryCountry, countries, "全部国家", directoryState.country);
+  fillDirectorySelect(directoryDecade, decades, "全部年代", directoryState.decade);
+  if (!countries.includes(directoryState.country)) {
+    directoryState.country = "";
+  }
+  if (!decades.includes(directoryState.decade)) {
+    directoryState.decade = "";
+    if (directoryDecade) {
+      directoryDecade.value = "";
+    }
+  }
+};
+
+const renderEntityList = (key) => {
+  populateDirectoryFilters(key);
+  const items = dirFilteredItems(key);
+  const groups = new Map();
+  for (const item of items) {
+    const letter = dirInitial(item);
+    if (!groups.has(letter)) {
+      groups.set(letter, []);
+    }
+    groups.get(letter).push(item);
+  }
+  const letters = [...groups.keys()].sort((a, b) => (a === "#" ? 1 : b === "#" ? -1 : a.localeCompare(b)));
+  directoryRailLetters = letters;
+  const html = letters
+    .map(
+      (letter) => `
+        <p class="owner-dir-letter" id="owner-dir-letter-${escapeHtml(letter)}">${escapeHtml(letter)}</p>
+        ${groups
+          .get(letter)
+          .map((item) =>
+            key === "composers"
+              ? dirRow({
+                  title: item.name,
+                  meta: dirComposerMeta(item),
+                  push: `composer:${item.id}`,
+                  entity: `composer:${item.id}`,
+                })
+              : dirRow({
+                  title: item.name,
+                  meta: dirPersonMeta(item),
+                  push: `person:${item.id}`,
+                  entity: `person:${item.id}`,
+                }),
+          )
+          .join("")}`,
+    )
+    .join("");
+  return { html, count: items.length };
+};
 
 const dirWorkGroupPath = (work) => {
   const groups = (work.groupIds || [])
@@ -3831,8 +3971,8 @@ const renderWorkTree = (works) => {
     parts.push(
       ...node.works.map((work) =>
         dirRow({
-          title: [work.title, work.catalogue].filter(Boolean).join(" / "),
-          meta: [work.titleLatin, dirWorkGroupPath(work).join(" / ")].filter(Boolean).join(" · "),
+          title: dirWorkTitle(work),
+          meta: dirWorkMeta(work),
           push: `work:${work.id}`,
           entity: `work:${work.id}`,
         }),
@@ -3868,28 +4008,9 @@ const renderDirectory = () => {
     ).join("");
   } else if (top.kind === "group") {
     title = DIR_ROOT_ROWS.find((row) => row.key === top.key)?.label || "检索目录";
-    const items =
-      top.key === "composers"
-        ? [...(lib.composers || [])].sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey)))
-        : dirPeopleByCategory(top.key).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh"));
-    countText = `${items.length} 位`;
-    html = items
-      .map((item) =>
-        top.key === "composers"
-          ? dirRow({
-              title: item.name,
-              meta: dirComposerMeta(item),
-              push: `composer:${item.id}`,
-              entity: `composer:${item.id}`,
-            })
-          : dirRow({
-              title: item.name,
-              meta: dirPersonMeta(item),
-              push: `person:${item.id}`,
-              entity: `person:${item.id}`,
-            }),
-      )
-      .join("");
+    const rendered = renderEntityList(top.key);
+    html = rendered.html;
+    countText = `${rendered.count} 位`;
   } else if (top.kind === "composer") {
     const composer = dirFindEntity("composer", top.id);
     const works = (lib.works || []).filter((work) => work.composerId === top.id);
@@ -3908,14 +4029,22 @@ const renderDirectory = () => {
     countText = `${recordings.length} 个版本`;
     html = `
       <div class="owner-dir-headline">
-        <span>${escapeHtml([composer?.name, work?.titleLatin, work?.catalogue].filter(Boolean).join(" / "))}</span>
+        <span>${escapeHtml(
+          [
+            composer?.name,
+            work?.titleLatin,
+            work?.catalogue && !String(work?.titleLatin || "").includes(work.catalogue) ? work.catalogue : "",
+          ]
+            .filter(Boolean)
+            .join(" / "),
+        )}</span>
         <button type="button" data-dir-entity="${escapeHtml(`work:${top.id}`)}">进入条目</button>
       </div>` +
       (recordings.length
         ? recordings
             .map((recording) =>
               dirRow({
-                title: recording.title,
+                title: dirRecordingDisplayTitle(recording),
                 meta: dirRecordingMeta(recording),
                 entity: `recording:${recording.id}`,
               }),
@@ -3949,7 +4078,7 @@ const renderDirectory = () => {
             rows
               .map((recording) =>
                 dirRow({
-                  title: recording.title,
+                  title: dirRecordingDisplayTitle(recording),
                   meta: dirRecordingMeta(recording),
                   entity: `recording:${recording.id}`,
                 }),
@@ -3967,6 +4096,18 @@ const renderDirectory = () => {
     directoryBack.hidden = stack.length === 0;
   }
   resultsHost.innerHTML = html || '<p class="owner-empty">没有条目。</p>';
+
+  const showFilters = top?.kind === "group";
+  if (directoryFilters) {
+    directoryFilters.hidden = !showFilters;
+  }
+  if (directoryRail) {
+    const letters = showFilters ? directoryRailLetters : [];
+    directoryRail.hidden = letters.length === 0;
+    directoryRail.innerHTML = letters
+      .map((letter) => `<button type="button" data-dir-letter="${escapeHtml(letter)}">${escapeHtml(letter)}</button>`)
+      .join("");
+  }
 };
 
 const dirNavigate = (payload) => {
@@ -3977,6 +4118,9 @@ const dirNavigate = (payload) => {
   }
   if (kind === "group") {
     directoryState.stack = [{ kind: "group", key: id }];
+    directoryState.country = "";
+    directoryState.decade = "";
+    directoryRailLetters = [];
   } else {
     directoryState.stack.push({ kind, id });
   }
@@ -5653,6 +5797,25 @@ searchResults.addEventListener("click", async (event) => {
 directoryBack?.addEventListener("click", () => {
   directoryState.stack.pop();
   renderDirectory();
+});
+
+directoryCountry?.addEventListener("change", () => {
+  directoryState.country = directoryCountry.value;
+  renderDirectory();
+});
+
+directoryDecade?.addEventListener("change", () => {
+  directoryState.decade = directoryDecade.value;
+  renderDirectory();
+});
+
+directoryRail?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-dir-letter]");
+  if (!button) {
+    return;
+  }
+  const target = document.getElementById(`owner-dir-letter-${button.dataset.dirLetter}`);
+  target?.scrollIntoView({ block: "start" });
 });
 
 if (detailBackButton) {
