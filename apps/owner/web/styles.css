@@ -4167,3 +4167,18 @@ body.owner-view-detail .owner-panel-main-scroll {
 .owner-panel--sidebar {
   scrollbar-gutter: auto;
 }
+
+/* 顶块与下方内容块间距，与左右块间距保持一致（1rem） */
+.owner-hero {
+  margin-bottom: 1rem;
+}
+
+/* 顶块与内容区之间只保留 1rem，和左右块间距一致（旧规则额外加了 0.95rem） */
+.owner-grid {
+  margin-top: 0;
+}
+
+/* 顶块与内容区之间由 .owner-shell 的 1rem gap 统一提供，避免叠加成 2rem */
+.owner-hero {
+  margin-bottom: 0;
+}

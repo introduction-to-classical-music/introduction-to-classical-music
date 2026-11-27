@@ -3816,6 +3816,9 @@ const dirRecordingDisplayTitle = (recording) => {
   const ensembles = dirCreditNames(recording, ["orchestra", "ensemble", "chorus"]);
   const year = String(recording.performanceDateText || "").match(/\d{4}/)?.[0] || "";
   const parts = [];
+  if (year) {
+    parts.push(year);
+  }
   if (conductors.length) {
     parts.push(conductors.join("、"));
   }
@@ -3824,9 +3827,6 @@ const dirRecordingDisplayTitle = (recording) => {
   }
   if (ensembles.length) {
     parts.push(ensembles.join("、"));
-  }
-  if (year) {
-    parts.push(year);
   }
   return parts.join(" · ") || recording.title || recording.id;
 };
@@ -4315,7 +4315,10 @@ const entityPageTitle = (entityType, entity) => {
     return "";
   }
   const label = DETAIL_TYPE_LABELS[entityType] || "";
-  const name = entityType === "recording" ? entity.title || entity.id : entity.title || entity.name || entity.id;
+  const name =
+    entityType === "recording"
+      ? dirRecordingDisplayTitle(entity)
+      : entity.title || entity.name || entity.id;
   return label ? `${label} · ${name}` : name;
 };
 
