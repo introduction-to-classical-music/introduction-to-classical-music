@@ -134,10 +134,23 @@ function buildFreshNamedEntityIdentity(
   };
 }
 
+function normalizeSortKeyValue(value: unknown) {
+  const raw = compactText(value);
+  if (!raw) {
+    return "";
+  }
+  return /^\d+$/.test(raw) ? raw.padStart(4, "0").slice(-4) : raw;
+}
+
 function resolveManagedSortKey(
   existingSortKey: unknown,
   collection: ArrayLike<unknown>,
+  requestedSortKey?: unknown,
 ) {
+  const requested = normalizeSortKeyValue(requestedSortKey);
+  if (requested) {
+    return requested;
+  }
   return compactText(existingSortKey || "") || nextSortKey(collection);
 }
 
@@ -467,7 +480,7 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
       deathYear: parseNumber(payload.deathYear),
       roles: payload.roles?.length ? payload.roles : ["composer"],
       aliases: parseList(payload.aliases),
-      sortKey: resolveManagedSortKey(existingComposer?.sortKey, library.composers),
+      sortKey: resolveManagedSortKey(existingComposer?.sortKey, library.composers, payload.sortKey),
       summary: compactText(payload.summary || ""),
       infoPanel,
     };
@@ -498,7 +511,7 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
       deathYear: parseNumber(payload.deathYear),
       roles: payload.roles?.length ? payload.roles : ["other"],
       aliases: parseList(payload.aliases),
-      sortKey: resolveManagedSortKey(!forkEntityId ? existingPerson?.sortKey : "", library.people),
+      sortKey: resolveManagedSortKey(!forkEntityId ? existingPerson?.sortKey : "", library.people, payload.sortKey),
       summary: compactText(payload.summary || ""),
       infoPanel,
     };
@@ -523,7 +536,7 @@ export function buildOwnerEntity(library: LibraryData, entityType: OwnerEditable
       catalogue: compactText(payload.catalogue || ""),
       summary: compactText(payload.summary || ""),
       infoPanel,
-      sortKey: resolveManagedSortKey(existingWork?.sortKey, library.works),
+      sortKey: resolveManagedSortKey(existingWork?.sortKey, library.works, payload.sortKey),
       updatedAt: timestamp,
     };
   }
