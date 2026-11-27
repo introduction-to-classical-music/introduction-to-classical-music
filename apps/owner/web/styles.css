@@ -4090,3 +4090,80 @@ body.owner-focus-detail .owner-card--detail .owner-tab-panels {
   font-size: 0.85em;
   vertical-align: baseline;
 }
+
+/* ---- 2026-11-27 第三轮：真正对称的留白 / 层级缩进 / 折叠行紧凑 ---- */
+
+/* 面板左右内边距一致（原右侧被 0.8rem 覆盖） */
+.owner-panel--main {
+  padding-right: 1.25rem;
+}
+
+/* 详情视图下主面板不再自己滚动（目录列表内部滚动），避免滚动条吃掉宽度 */
+body.owner-view-detail .owner-panel-main-scroll {
+  overflow: hidden;
+}
+
+/* 目录卡片右侧留出滚动条槽，滚动条落在内边距中间 */
+.owner-card--search {
+  padding-right: 0.55rem;
+}
+
+.owner-card--search .owner-result-list {
+  padding-right: 0.7rem;
+}
+
+/* 折叠行改为紧凑单倍行距 */
+.owner-dir-group {
+  padding: 0.18rem 0.2rem;
+  line-height: 1.7;
+  border-bottom: 1px solid rgba(113, 86, 54, 0.14);
+}
+
+.owner-dir-group--depth2 {
+  padding-left: 1.1rem;
+}
+
+.owner-dir-group--depth3 {
+  padding-left: 2.2rem;
+}
+
+.owner-dir-group--depth4 {
+  padding-left: 3.3rem;
+}
+
+/* 叶子行按层级缩进，与上层分组严格递进 */
+.owner-dir-row--depth1 .owner-dir-row__main {
+  padding-left: 1.1rem;
+}
+
+.owner-dir-row--depth2 .owner-dir-row__main {
+  padding-left: 2.2rem;
+}
+
+.owner-dir-row--depth3 .owner-dir-row__main {
+  padding-left: 3.3rem;
+}
+
+.owner-dir-row--depth4 .owner-dir-row__main {
+  padding-left: 4.4rem;
+}
+
+.owner-dir-row--depth5 .owner-dir-row__main {
+  padding-left: 5.5rem;
+}
+
+/* hidden 属性必须真正隐藏（避免被 label 的 display 覆盖） */
+.owner-dir-filters label[hidden] {
+  display: none;
+}
+
+/* 主面板不再预留滚动条槽（否则即使 overflow:hidden 也会占 18px） */
+.owner-panel-main-scroll {
+  scrollbar-gutter: auto;
+}
+
+/* 面板本身也不预留滚动条槽（否则内容区右侧少 15px，左右不对称） */
+.owner-panel--main,
+.owner-panel--sidebar {
+  scrollbar-gutter: auto;
+}

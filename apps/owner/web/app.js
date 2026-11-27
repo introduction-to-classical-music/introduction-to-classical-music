@@ -1093,6 +1093,7 @@ const mergeEntity = async (form) => {
 };
 
 const setActiveView = (viewName) => {
+  document.body.classList.toggle("owner-view-detail", viewName === "detail");
   viewTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.viewTab === viewName));
   viewPanels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.viewPanel === viewName));
   if (viewName === "review") {
@@ -3783,8 +3784,8 @@ const dirPersonMeta = (person) =>
 
 const dirComposerMeta = (composer) => [composer.nameLatin, composer.country].filter(Boolean).join(" / ");
 
-const dirRow = ({ title, meta, push, entity, warn = false, extra = "" }) => `
-  <div class="owner-dir-row">
+const dirRow = ({ title, meta, push, entity, warn = false, depth = 0, extra = "" }) => `
+  <div class="owner-dir-row owner-dir-row--depth${Math.min(depth, 5)}">
     <button type="button" class="owner-dir-row__main" ${
       push
         ? `data-dir-push="${escapeHtml(push)}"`
@@ -3852,9 +3853,21 @@ const dirLatinIndexName = (item) => {
   return String(item.name || "");
 };
 
-const dirInitial = (item) => {
-  const latin = dirLatinIndexName(item);
-  const letter = latin ? latin[0].toUpperCase() : "";
+const dirIndexWord = (item, key) => {
+  const latin = dirLatinIndexName(item).replace(/[·.]/g, " ").trim();
+  if (!latin) {
+    return "";
+  }
+  if (key === "ensembles") {
+    return latin;
+  }
+  const parts = latin.split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : latin;
+};
+
+const dirInitial = (item, key) => {
+  const word = dirIndexWord(item, key);
+  const letter = word ? word[0].toUpperCase() : "";
   return /[A-Z]/.test(letter) ? letter : "#";
 };
 
@@ -3924,7 +3937,9 @@ const dirFilteredItems = (key) =>
       }
       return true;
     })
-    .sort((a, b) => String(a.nameLatin || a.name || "").localeCompare(String(b.nameLatin || b.name || "")));
+    .sort((a, b) =>
+      String(dirIndexWord(a, key) || a.name || "").localeCompare(String(dirIndexWord(b, key) || b.name || "")),
+    );
 
 const fillDirectorySelect = (select, values, label, current) => {
   if (!select) {
@@ -3990,7 +4005,7 @@ const renderEntityList = (key) => {
   const items = dirFilteredItems(key);
   const groups = new Map();
   for (const item of items) {
-    const letter = dirInitial(item);
+    const letter = dirInitial(item, key);
     if (!groups.has(letter)) {
       groups.set(letter, []);
     }
@@ -4077,7 +4092,8 @@ const dirRenderTree = (root, renderRow, unit) => {
         walk(child);
       }
     }
-    parts.push(...node.rows.map(renderRow));
+    const rowDepth = Math.min(node.depth + 1, 5);
+    parts.push(...node.rows.map((row) => renderRow(row, rowDepth)));
   };
   walk(root);
   return parts.join("");
@@ -4092,12 +4108,13 @@ const renderWorkTree = (works) => {
   }
   return dirRenderTree(
     root,
-    (work) =>
+    (work, depth) =>
       dirRow({
         title: dirWorkTitle(work),
         meta: dirWorkMeta(work),
         push: `work:${work.id}`,
         entity: `work:${work.id}`,
+        depth,
       }),
     "部",
   );
@@ -4119,12 +4136,13 @@ const renderPersonRecordings = (recordings) => {
   }
   return dirRenderTree(
     root,
-    (recording) =>
+    (recording, depth) =>
       dirRow({
         title: dirRecordingDisplayTitle(recording),
         meta: dirRecordingMeta(recording),
         warn: dirRecordingHasLatinOnly(recording),
         entity: `recording:${recording.id}`,
+        depth,
       }),
     "个",
   );
@@ -7487,6 +7505,7 @@ siteForm.addEventListener("click", async (event) => {
 
 const bootstrap = async () => {
   try {
+    document.body.classList.add("owner-view-detail");
     applyCollapsedPanelState("llm-panel");
     applyCollapsedPanelState("automation-preview-panel");
     applyCollapsedPanelState("automation-job-panel");
