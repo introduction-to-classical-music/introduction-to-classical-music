@@ -96,6 +96,24 @@ const { title, description = "" } = Astro.props;
           event.preventDefault();
           void openLocalResource(trigger);
         });
+
+        // External resource links open in the system browser, never inside the
+        // packaged local-site window.
+        document.addEventListener("click", (event) => {
+          const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+          if (!anchor) {
+            return;
+          }
+          const href = anchor.getAttribute("href") || "";
+          if (!/^https?:/i.test(href)) {
+            return;
+          }
+          const bridge = window.desktopLauncher;
+          if (bridge && typeof bridge.openExternal === "function") {
+            event.preventDefault();
+            void bridge.openExternal(href);
+          }
+        });
       })();
     </script>
   </body>

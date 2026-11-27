@@ -3907,6 +3907,42 @@ const dirInstrumentOf = (item) => {
   return "";
 };
 
+
+const dirWorkCatalogNumber = (work) => {
+  const source = `${work.catalogue || ""} ${work.titleLatin || ""}`;
+  const match = source.match(/(?:Op\.?|WAB|GMW|BWV|Hob\.|K\.|D\.?)\s*([0-9]+)/i);
+  if (match) {
+    return Number(match[1]);
+  }
+  const bare = String(work.catalogue || "").match(/(\d+)/);
+  return bare ? Number(bare[1]) : Number.POSITIVE_INFINITY;
+};
+
+const dirWorkCompare = (left, right) => {
+  const diff = dirWorkCatalogNumber(left) - dirWorkCatalogNumber(right);
+  if (Number.isFinite(diff) && diff !== 0) {
+    return diff;
+  }
+  return String(left.title || "").localeCompare(String(right.title || ""), "zh-Hans-CN");
+};
+
+const dirRecordingSortValue = (recording) => {
+  const text = String(recording.performanceDateText || "");
+  const match = text.match(/(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/);
+  if (!match) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Number(match[1]) * 10000 + Number(match[2] || 1) * 100 + Number(match[3] || 1);
+};
+
+const dirRecordingCompare = (left, right) => {
+  const diff = dirRecordingSortValue(left) - dirRecordingSortValue(right);
+  if (Number.isFinite(diff) && diff !== 0) {
+    return diff;
+  }
+  return String(left.sortKey || "").localeCompare(String(right.sortKey || ""));
+};
+
 const dirRecordingHasLatinOnly = (recording) =>
   (recording.credits || []).some((credit) => credit.displayName && !dirHasCjk(credit.displayName));
 
@@ -4188,11 +4224,11 @@ const renderDirectory = () => {
       <div class="owner-dir-headline">
         <span>${escapeHtml([composer?.nameLatin, composer?.country].filter(Boolean).join(" / "))}</span>
         <button type="button" data-dir-entity="${escapeHtml(`composer:${top.id}`)}">进入条目</button>
-      </div>` + (works.length ? renderWorkTree(works) : '<p class="owner-empty">该作曲家下暂无作品。</p>');
+      </div>` + (works.length ? renderWorkTree(works.slice().sort(dirWorkCompare)) : '<p class="owner-empty">该作曲家下暂无作品。</p>');
   } else if (top.kind === "work") {
     const work = dirFindEntity("work", top.id);
     const composer = (lib.composers || []).find((item) => item.id === work?.composerId);
-    const recordings = dirRecordingsOfWork(top.id);
+    const recordings = dirRecordingsOfWork(top.id).slice().sort(dirRecordingCompare);
     title = work?.title || "作品";
     countText = `${recordings.length} 个版本`;
     html = `
@@ -4222,7 +4258,7 @@ const renderDirectory = () => {
         : '<p class="owner-empty">该作品下暂无版本。</p>');
   } else if (top.kind === "person") {
     const person = dirFindEntity("person", top.id);
-    const recordings = dirRecordingsOfPerson(top.id);
+    const recordings = dirRecordingsOfPerson(top.id).slice().sort(dirRecordingCompare);
     title = person?.name || "人物";
     countText = `${recordings.length} 个版本`;
     html = `
@@ -7580,3 +7616,27 @@ const exportManagedLibraryWithPicker = async () => {
 };
 
 void bootstrap();
+
+
+const openExternalLink = (url) => {
+  const bridge = window.desktopLauncher;
+  if (bridge && typeof bridge.openExternal === "function") {
+    bridge.openExternal(url).catch(() => {});
+    return true;
+  }
+  return false;
+};
+
+document.addEventListener("click", (event) => {
+  const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+  if (!anchor) {
+    return;
+  }
+  const href = anchor.getAttribute("href") || "";
+  if (!/^https?:/i.test(href)) {
+    return;
+  }
+  if (openExternalLink(href)) {
+    event.preventDefault();
+  }
+});

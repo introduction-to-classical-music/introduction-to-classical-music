@@ -805,7 +805,7 @@ ipcMain.handle("launcher:open-library-folder", async (event) => {
 });
 
 ipcMain.handle("desktop:open-external", async (event, target: string) => {
-  assertIpcSenderWindow(event, ["launcher", "owner"], "desktop:open-external");
+  assertIpcSenderWindow(event, ["launcher", "owner", "library"], "desktop:open-external");
   const normalizedTarget = String(target ?? "").trim();
   // W3: shell.openExternal must never see file:/javascript:/smb:/... schemes.
   if (!isAllowedExternalTarget(normalizedTarget)) {

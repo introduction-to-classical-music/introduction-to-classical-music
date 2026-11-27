@@ -4,4 +4,5 @@ const { contextBridge, ipcRenderer } = require("electron") as typeof import("ele
 // Local-site window bridge: only the validated local-resource open action.
 contextBridge.exposeInMainWorld("desktopLauncher", {
   openLocalResource: (target: string) => ipcRenderer.invoke("desktop:open-local-resource", target),
+  openExternal: (target: string) => ipcRenderer.invoke("desktop:open-external", target),
 });

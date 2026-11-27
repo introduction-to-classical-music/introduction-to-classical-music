@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("desktopLauncher", {
   activateLibrary: (rootDir: string) => ipcRenderer.invoke("desktop:activate-library", rootDir),
   renameLibrary: (libraryName: string) => ipcRenderer.invoke("desktop:rename-library", libraryName),
   openLocalResource: (target: string) => ipcRenderer.invoke("desktop:open-local-resource", target),
+  openExternal: (target: string) => ipcRenderer.invoke("desktop:open-external", target),
   pickLibraryFolder: () => ipcRenderer.invoke("desktop:pick-library-folder"),
   pickDirectory: () => ipcRenderer.invoke("desktop:pick-directory"),
   pickLocalResourceFile: () => ipcRenderer.invoke("desktop:pick-local-resource-file"),
