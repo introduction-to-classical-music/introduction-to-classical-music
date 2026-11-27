@@ -3800,7 +3800,7 @@ const dirRow = ({ title, meta, push, entity, warn = false, depth = 0, extra = ""
     ${extra}
   </div>`;
 
-const dirWorkTitle = (work) => [work.title, work.catalogue].filter(Boolean).join(" · ");
+const dirWorkTitle = (work) => [work.title, work.catalogue].filter(Boolean).join(", ");
 
 const dirWorkMeta = (work) => [work.titleLatin, dirWorkGroupPath(work).join(" / ")].filter(Boolean).join(" · ");
 
