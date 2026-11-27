@@ -733,6 +733,8 @@ function buildSearchResults(library, site, query, type, limit = 100) {
             item.abbreviations,
             getCountryText(item),
             item.roles,
+            // 无独立"乐器"字段：把简介纳入关键词，使"钢琴家/小提琴家"等可作为检索词
+            item.summary,
           ]),
         };
       }),

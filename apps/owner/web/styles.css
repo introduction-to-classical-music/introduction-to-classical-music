@@ -4012,3 +4012,81 @@ body.owner-focus-detail .owner-card--detail .owner-tab-panels {
 .owner-dir-rail::-webkit-scrollbar {
   display: none;
 }
+
+/* ---- 2026-11-27 第二轮：间距统一 / 折叠层级 / 警示标记 ---- */
+
+/* 主面板不再预留滚动条，右侧留白与左侧一致 */
+.owner-panel-main-scroll {
+  padding-right: 0;
+  scrollbar-gutter: auto;
+}
+
+/* 条目页：滚动条落在内边距中间 */
+body.owner-focus-detail .owner-card--detail {
+  padding-right: 0.75rem;
+}
+
+body.owner-focus-detail .owner-card--detail .owner-tab-panels {
+  padding-right: 0.75rem;
+}
+
+/* 折叠分组头 */
+.owner-dir-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.2rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.owner-dir-group:hover {
+  color: var(--accent);
+}
+
+.owner-dir-group__caret {
+  color: var(--muted);
+  font-size: 0.75rem;
+  width: 1rem;
+  flex: 0 0 auto;
+}
+
+.owner-dir-group__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.owner-dir-group__count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.owner-dir-group--depth1 .owner-dir-group__label {
+  font-weight: 600;
+}
+
+.owner-dir-group--depth2 {
+  padding-left: 1.1rem;
+}
+
+.owner-dir-group--depth3 {
+  padding-left: 2.2rem;
+}
+
+.owner-dir-group--depth4 {
+  padding-left: 3.3rem;
+}
+
+/* 缺少中文译名的警示 */
+.owner-warn {
+  display: inline-block;
+  margin-left: 0.35rem;
+  color: #a2582e;
+  font-size: 0.85em;
+  vertical-align: baseline;
+}

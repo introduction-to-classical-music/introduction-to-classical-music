@@ -105,6 +105,9 @@ const directoryFilters = document.querySelector("#owner-dir-filters");
 const directoryCountry = document.querySelector("#owner-dir-country");
 const directoryDecade = document.querySelector("#owner-dir-decade");
 const directoryRail = document.querySelector("#owner-dir-rail");
+const directoryYearLabel = document.querySelector("#owner-dir-year-label");
+const directoryInstrumentLabel = document.querySelector("#owner-dir-instrument-label");
+const directoryInstrument = document.querySelector("#owner-dir-instrument");
 const searchDirectory = document.querySelector("#owner-search-directory");
 const detailPage = document.querySelector("#owner-detail-page");
 const detailPageTitle = document.querySelector("#owner-detail-page-title");
@@ -3750,7 +3753,7 @@ const renderSearchResults = (results, options = {}) => {
 };
 
 // ---- 三级目录浏览：分类 → 实体 → 作品 → 版本 ------------------------------
-const directoryState = { stack: [], country: "", decade: "" };
+const directoryState = { stack: [], country: "", decade: "", instrument: "", collapsed: new Set() };
 let directoryRailLetters = [];
 
 const DIR_ROOT_ROWS = [
@@ -3780,14 +3783,16 @@ const dirPersonMeta = (person) =>
 
 const dirComposerMeta = (composer) => [composer.nameLatin, composer.country].filter(Boolean).join(" / ");
 
-const dirRow = ({ title, meta, push, entity, extra = "" }) => `
+const dirRow = ({ title, meta, push, entity, warn = false, extra = "" }) => `
   <div class="owner-dir-row">
     <button type="button" class="owner-dir-row__main" ${
       push
         ? `data-dir-push="${escapeHtml(push)}"`
         : `data-dir-entity="${escapeHtml(entity || "")}"`
     }>
-      <span class="owner-directory__title">${escapeHtml(title)}</span>
+      <span class="owner-directory__title">${escapeHtml(title)}${
+        warn ? '<span class="owner-warn" title="缺少中文译名，显示的是原文">⚠</span>' : ""
+      }</span>
       <span class="owner-directory__meta">${escapeHtml(meta || "")}</span>
     </button>
     ${push && entity ? `<button type="button" class="owner-dir-row__link" data-dir-entity="${escapeHtml(entity)}">进入条目</button>` : ""}
@@ -3830,11 +3835,67 @@ const dirItemCountries = (item) => {
   return values.map((value) => String(value || "").trim()).filter(Boolean);
 };
 
+const dirLatinIndexName = (item) => {
+  const raw = String(item.nameLatin || "");
+  const english = raw.match(/EN:\s*([^,，/|]+)/i)?.[1];
+  const candidates = [english, ...raw.split(/[,，/|]/)].filter(Boolean);
+  for (const candidate of candidates) {
+    const value = String(candidate).replace(/^EN:\s*/i, "").trim();
+    if (/^[A-Za-z]/.test(value)) {
+      return value;
+    }
+    const ascii = value.match(/[A-Za-z][A-Za-z'\- ]{1,}/)?.[0]?.trim();
+    if (ascii && /^[A-Za-z]/.test(ascii)) {
+      return ascii;
+    }
+  }
+  return String(item.name || "");
+};
+
 const dirInitial = (item) => {
-  const latin = String(item.nameLatin || "").trim();
+  const latin = dirLatinIndexName(item);
   const letter = latin ? latin[0].toUpperCase() : "";
   return /[A-Z]/.test(letter) ? letter : "#";
 };
+
+const dirHasCjk = (value) => /[一-鿿]/.test(String(value || ""));
+
+const DIR_INSTRUMENTS = [
+  ["钢琴", ["钢琴", "piano", "pianist"]],
+  ["小提琴", ["小提琴", "violin"]],
+  ["中提琴", ["中提琴", "viola"]],
+  ["大提琴", ["大提琴", "cello"]],
+  ["低音提琴", ["低音提琴", "double bass", "contrabass"]],
+  ["长笛", ["长笛", "flute"]],
+  ["双簧管", ["双簧管", "oboe"]],
+  ["单簧管", ["单簧管", "clarinet"]],
+  ["大管", ["大管", "巴松", "bassoon"]],
+  ["圆号", ["圆号", "horn"]],
+  ["小号", ["小号", "trumpet"]],
+  ["长号", ["长号", "trombone"]],
+  ["竖琴", ["竖琴", "harp"]],
+  ["管风琴", ["管风琴", "organ"]],
+  ["大键琴", ["大键琴", "羽管键琴", "harpsichord"]],
+  ["吉他", ["吉他", "guitar"]],
+  ["声乐", ["女高音", "男高音", "女中音", "男中音", "男低音", "soprano", "tenor", "baritone", "mezzo", "bass "]],
+  ["打击乐", ["打击乐", "percussion"]],
+];
+
+const dirInstrumentOf = (item) => {
+  const haystack = [item.name, item.nameLatin, (item.aliases || []).join(" "), item.summary]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  for (const [label, keywords] of DIR_INSTRUMENTS) {
+    if (keywords.some((keyword) => haystack.includes(String(keyword).toLowerCase()))) {
+      return label;
+    }
+  }
+  return "";
+};
+
+const dirRecordingHasLatinOnly = (recording) =>
+  (recording.credits || []).some((credit) => credit.displayName && !dirHasCjk(credit.displayName));
 
 const dirSourceItems = (key) =>
   key === "composers" ? [...(dirLibrary().composers || [])] : dirPeopleByCategory(key);
@@ -3848,6 +3909,16 @@ const dirFilteredItems = (key) =>
       if (directoryState.decade) {
         const year = Number(item.birthYear || 0);
         if (!year || String(Math.floor(year / 10) * 10) !== directoryState.decade) {
+          return false;
+        }
+      }
+      if (directoryState.instrument) {
+        const instrument = dirInstrumentOf(item);
+        if (directoryState.instrument === "__none__") {
+          if (instrument) {
+            return false;
+          }
+        } else if (instrument !== directoryState.instrument) {
           return false;
         }
       }
@@ -3877,7 +3948,7 @@ const populateDirectoryFilters = (key) => {
     ),
   ].sort();
   fillDirectorySelect(directoryCountry, countries, "全部国家", directoryState.country);
-  fillDirectorySelect(directoryDecade, decades, "全部年代", directoryState.decade);
+  fillDirectorySelect(directoryDecade, decades, key === "ensembles" ? "全部年代" : "全部年代", directoryState.decade);
   if (!countries.includes(directoryState.country)) {
     directoryState.country = "";
   }
@@ -3886,6 +3957,31 @@ const populateDirectoryFilters = (key) => {
     if (directoryDecade) {
       directoryDecade.value = "";
     }
+  }
+  const showInstrument = key === "soloists";
+  if (directoryInstrumentLabel) {
+    directoryInstrumentLabel.hidden = !showInstrument;
+  }
+  if (showInstrument) {
+    const instruments = [...new Set(source.map(dirInstrumentOf).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
+    if (instruments.length) {
+      instruments.push("__none__");
+    }
+    fillDirectorySelect(directoryInstrument, instruments, "全部乐器", directoryState.instrument);
+    if (directoryInstrument) {
+      const unmarked = [...directoryInstrument.options].find((option) => option.value === "__none__");
+      if (unmarked) {
+        unmarked.textContent = "未标注";
+      }
+    }
+    if (!instruments.includes(directoryState.instrument)) {
+      directoryState.instrument = "";
+      if (directoryInstrument) {
+        directoryInstrument.value = "";
+      }
+    }
+  } else {
+    directoryState.instrument = "";
   }
 };
 
@@ -3946,41 +4042,92 @@ const dirRecordingsOfPerson = (personId) =>
 const dirRecordingMeta = (recording) =>
   [recording.performanceDateText, recording.venueText, recording.label].filter(Boolean).join(" / ");
 
-const renderWorkTree = (works) => {
-  const root = { children: new Map(), works: [], count: 0 };
-  for (const work of works) {
-    let node = root;
-    node.count += 1;
-    for (const segment of dirWorkGroupPath(work)) {
-      if (!node.children.has(segment)) {
-        node.children.set(segment, { children: new Map(), works: [], count: 0 });
-      }
-      node = node.children.get(segment);
-      node.count += 1;
-    }
-    node.works.push(work);
+const dirNode = (key, label, depth) => ({ key, label, depth, children: new Map(), rows: [], count: 0 });
+
+const dirEnsureChild = (node, key, label) => {
+  if (!node.children.has(key)) {
+    node.children.set(key, dirNode(`${node.key}/${key}`, label, node.depth + 1));
   }
-  const renderNode = (node, depth) => {
-    const parts = [];
-    for (const [segment, child] of node.children) {
+  return node.children.get(key);
+};
+
+const dirBumpCounts = (root, segments) => {
+  root.count += 1;
+  let node = root;
+  for (const segment of segments) {
+    node = dirEnsureChild(node, segment.key, segment.label);
+    node.count += 1;
+  }
+  return node;
+};
+
+const dirRenderTree = (root, renderRow, unit) => {
+  const parts = [];
+  const walk = (node) => {
+    for (const child of node.children.values()) {
+      const collapsed = directoryState.collapsed.has(child.key);
       parts.push(
-        `<p class="owner-directory__subhead owner-directory__subhead--depth${Math.min(depth + 1, 3)}">${escapeHtml(segment)}<span>${child.count} 部</span></p>`,
+        `<button type="button" class="owner-dir-group owner-dir-group--depth${Math.min(child.depth, 4)}" data-dir-toggle="${escapeHtml(child.key)}">
+          <span class="owner-dir-group__caret">${collapsed ? "▸" : "▾"}</span>
+          <span class="owner-dir-group__label">${escapeHtml(child.label)}</span>
+          <span class="owner-dir-group__count">${child.count} ${unit}</span>
+        </button>`,
       );
-      parts.push(renderNode(child, depth + 1));
+      if (!collapsed) {
+        walk(child);
+      }
     }
-    parts.push(
-      ...node.works.map((work) =>
-        dirRow({
-          title: dirWorkTitle(work),
-          meta: dirWorkMeta(work),
-          push: `work:${work.id}`,
-          entity: `work:${work.id}`,
-        }),
-      ),
-    );
-    return parts.join("");
+    parts.push(...node.rows.map(renderRow));
   };
-  return renderNode(root, 0);
+  walk(root);
+  return parts.join("");
+};
+
+const renderWorkTree = (works) => {
+  const root = dirNode("works", "", 0);
+  for (const work of works) {
+    const segments = dirWorkGroupPath(work).map((title) => ({ key: `g:${title}`, label: title }));
+    const leaf = dirBumpCounts(root, segments);
+    leaf.rows.push(work);
+  }
+  return dirRenderTree(
+    root,
+    (work) =>
+      dirRow({
+        title: dirWorkTitle(work),
+        meta: dirWorkMeta(work),
+        push: `work:${work.id}`,
+        entity: `work:${work.id}`,
+      }),
+    "部",
+  );
+};
+
+const renderPersonRecordings = (recordings) => {
+  const lib = dirLibrary();
+  const root = dirNode("person", "", 0);
+  for (const recording of recordings) {
+    const work = (lib.works || []).find((item) => item.id === recording.workId);
+    const composer = (lib.composers || []).find((item) => item.id === work?.composerId);
+    const segments = [
+      { key: `c:${composer?.id || "unknown"}`, label: composer?.name || "未关联作曲家" },
+      ...(work ? dirWorkGroupPath(work) : []).map((title) => ({ key: `g:${title}`, label: title })),
+      { key: `w:${work?.id || recording.id}`, label: work ? dirWorkTitle(work) : recording.title },
+    ];
+    const leaf = dirBumpCounts(root, segments);
+    leaf.rows.push(recording);
+  }
+  return dirRenderTree(
+    root,
+    (recording) =>
+      dirRow({
+        title: dirRecordingDisplayTitle(recording),
+        meta: dirRecordingMeta(recording),
+        warn: dirRecordingHasLatinOnly(recording),
+        entity: `recording:${recording.id}`,
+      }),
+    "个",
+  );
 };
 
 const dirFindEntity = (kind, id) => {
@@ -4011,6 +4158,9 @@ const renderDirectory = () => {
     const rendered = renderEntityList(top.key);
     html = rendered.html;
     countText = `${rendered.count} 位`;
+    if (directoryYearLabel) {
+      directoryYearLabel.firstChild.textContent = top.key === "ensembles" ? "创建年代" : "出生年代";
+    }
   } else if (top.kind === "composer") {
     const composer = dirFindEntity("composer", top.id);
     const works = (lib.works || []).filter((work) => work.composerId === top.id);
@@ -4046,6 +4196,7 @@ const renderDirectory = () => {
               dirRow({
                 title: dirRecordingDisplayTitle(recording),
                 meta: dirRecordingMeta(recording),
+                warn: dirRecordingHasLatinOnly(recording),
                 entity: `recording:${recording.id}`,
               }),
             )
@@ -4056,36 +4207,11 @@ const renderDirectory = () => {
     const recordings = dirRecordingsOfPerson(top.id);
     title = person?.name || "人物";
     countText = `${recordings.length} 个版本`;
-    const grouped = new Map();
-    for (const recording of recordings) {
-      const work = (lib.works || []).find((item) => item.id === recording.workId);
-      const composer = (lib.composers || []).find((item) => item.id === work?.composerId);
-      const key = [composer?.name, work?.title].filter(Boolean).join(" · ") || "未关联作品";
-      if (!grouped.has(key)) {
-        grouped.set(key, []);
-      }
-      grouped.get(key).push(recording);
-    }
     html = `
       <div class="owner-dir-headline">
         <span>${escapeHtml(dirPersonMeta(person))}</span>
         <button type="button" data-dir-entity="${escapeHtml(`person:${top.id}`)}">进入条目</button>
-      </div>` +
-      ([...grouped.entries()]
-        .map(
-          ([groupTitle, rows]) =>
-            `<p class="owner-directory__subhead">${escapeHtml(groupTitle)}</p>` +
-            rows
-              .map((recording) =>
-                dirRow({
-                  title: dirRecordingDisplayTitle(recording),
-                  meta: dirRecordingMeta(recording),
-                  entity: `recording:${recording.id}`,
-                }),
-              )
-              .join(""),
-        )
-        .join("") || '<p class="owner-empty">暂无关联版本。</p>');
+      </div>` + (recordings.length ? renderPersonRecordings(recordings) : '<p class="owner-empty">暂无关联版本。</p>');
   }
 
   searchCount.textContent = countText;
@@ -4116,10 +4242,12 @@ const dirNavigate = (payload) => {
   if (!kind || !id) {
     return;
   }
+  directoryState.collapsed = new Set();
   if (kind === "group") {
     directoryState.stack = [{ kind: "group", key: id }];
     directoryState.country = "";
     directoryState.decade = "";
+    directoryState.instrument = "";
     directoryRailLetters = [];
   } else {
     directoryState.stack.push({ kind, id });
@@ -5768,6 +5896,17 @@ const refreshSelectionPreviewDebounced = (() => {
 })();
 
 searchResults.addEventListener("click", async (event) => {
+  const toggleButton = event.target.closest("[data-dir-toggle]");
+  if (toggleButton) {
+    const key = toggleButton.dataset.dirToggle;
+    if (directoryState.collapsed.has(key)) {
+      directoryState.collapsed.delete(key);
+    } else {
+      directoryState.collapsed.add(key);
+    }
+    renderDirectory();
+    return;
+  }
   const entityButton = event.target.closest("[data-dir-entity]");
   if (entityButton) {
     try {
@@ -5806,6 +5945,11 @@ directoryCountry?.addEventListener("change", () => {
 
 directoryDecade?.addEventListener("change", () => {
   directoryState.decade = directoryDecade.value;
+  renderDirectory();
+});
+
+directoryInstrument?.addEventListener("change", () => {
+  directoryState.instrument = directoryInstrument.value;
   renderDirectory();
 });
 
