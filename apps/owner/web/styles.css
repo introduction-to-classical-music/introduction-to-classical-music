@@ -4182,3 +4182,42 @@ body.owner-view-detail .owner-panel-main-scroll {
 .owner-hero {
   margin-bottom: 0;
 }
+
+/* 版本多图展示：主图 + 缩略图切换 */
+.owner-image-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.owner-image-thumbs {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.owner-image-thumb {
+  width: 3.2rem;
+  height: 3.2rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-strong);
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.owner-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.owner-image-thumb:hover,
+.owner-image-thumb.is-active {
+  opacity: 1;
+  border-color: var(--line-strong);
+}

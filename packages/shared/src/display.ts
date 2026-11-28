@@ -533,10 +533,14 @@ export function buildRecordingDisplayModel(recording: Recording, library: Librar
   } else if (presentationFamily === "opera") {
     principalPrimary = conductorPrimary;
     principalSecondary = conductorSecondary;
-    supportingPrimary = singerPrimary || soloistPrimary;
-    supportingSecondary = singerSecondary || soloistSecondary;
-    title = joinRecordingTitleParts([principalPrimary, supportingPrimary, ensemblePrimary, titleEventPrimary]);
-    subtitle = joinRecordingTitleParts([principalSecondary, supportingSecondary, ensembleSecondary, titleEventPrimary]);
+    // 歌剧标题按「指挥 - 乐团/合唱 - 核心主演（最多 3 位）」排列，
+    // 其余演员以 other 角色保留在参与者中，避免标题过长。
+    const coreSingerPrimary = joinDisplayValues(credits.singers.slice(0, 3), "primary");
+    const coreSingerSecondary = joinDisplayValues(credits.singers.slice(0, 3), "secondary");
+    supportingPrimary = coreSingerPrimary || soloistPrimary;
+    supportingSecondary = coreSingerSecondary || soloistSecondary;
+    title = joinRecordingTitleParts([principalPrimary, ensemblePrimary, supportingPrimary, titleEventPrimary]);
+    subtitle = joinRecordingTitleParts([principalSecondary, ensembleSecondary, supportingSecondary, titleEventPrimary]);
   } else if (presentationFamily === "solo" || presentationFamily === "chamber") {
     const leadPrimary = groupPrimary || soloistPrimary || singerPrimary;
     const leadSecondary = groupSecondary || soloistSecondary || singerSecondary;

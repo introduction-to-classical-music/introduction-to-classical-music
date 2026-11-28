@@ -915,6 +915,11 @@ const renderFormImagePreview = (entityType, asset) => {
   if (!preview) {
     return;
   }
+  if (entityType === "recording" && Array.isArray(asset?.images) && asset.images.length > 1) {
+    preview.classList.add("owner-image-gallery");
+    preview.innerHTML = buildImageGalleryHtml(asset.images, "版本图片");
+    return;
+  }
   const primaryRecordingImage = asset?.images?.[0] || null;
   const src = compact(asset?.src || asset?.avatarSrc || primaryRecordingImage?.src);
   const alt = compact(
@@ -2856,7 +2861,19 @@ const buildInlineEntityEditorHtml = (entityType, entity) => {
           <label class="owner-inline-editor__field--full"><span>备注</span><textarea data-inline-entity-field="notes">${escapeHtml(entity.notes || "")}</textarea></label>
         </div>
         <aside class="owner-inline-editor__media">
-          <div class="owner-image-preview owner-image-preview--large" data-inline-entity-image-preview>${recordingImage?.src ? `<img src="${escapeHtml(recordingImage.src)}" alt="${escapeHtml(recordingImage.alt || entity.title || "版本图片")}" />` : "<span>暂无图片</span>"}</div>
+          <div class="owner-image-gallery" data-image-gallery>
+            <div class="owner-image-preview owner-image-preview--large" data-inline-entity-image-preview>${recordingImage?.src ? `<img src="${escapeHtml(recordingImage.src)}" alt="${escapeHtml(recordingImage.alt || entity.title || "版本图片")}" />` : "<span>暂无图片</span>"}</div>
+            ${
+              (entity.images || []).length > 1
+                ? `<div class="owner-image-thumbs" data-image-thumbs>${(entity.images || [])
+                    .map(
+                      (image, index) =>
+                        `<button type="button" class="owner-image-thumb${index === 0 ? " is-active" : ""}" data-image-thumb-src="${escapeHtml(image.src)}" title="${escapeHtml(image.alt || `图片 ${index + 1}`)}"><img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt || `图片 ${index + 1}`)}" /></button>`,
+                    )
+                    .join("")}</div>`
+                : ""
+            }
+          </div>
           <label class="owner-upload-button">
             <span>上传图片</span>
             <input type="file" accept="image/*" data-inline-entity-image-upload hidden />
@@ -3009,6 +3026,25 @@ const buildLifeSpan = (entity) => {
   return `${birth || "?"}-${death || "?"}`;
 };
 
+const buildImageGalleryHtml = (images, fallbackAlt) => {
+  const list = Array.isArray(images) ? images.filter((image) => image && image.src) : [];
+  if (!list.length) {
+    return '<div class="owner-image-preview"><span>暂无图片</span></div>';
+  }
+  const main = list[0];
+  const mainHtml = `<div class="owner-image-preview" data-detail-image-preview><img src="${escapeHtml(main.src)}" alt="${escapeHtml(main.alt || fallbackAlt || "版本图片")}" /></div>`;
+  if (list.length === 1) {
+    return mainHtml;
+  }
+  const thumbs = list
+    .map(
+      (image, index) =>
+        `<button type="button" class="owner-image-thumb${index === 0 ? " is-active" : ""}" data-image-thumb-src="${escapeHtml(image.src)}" title="${escapeHtml(image.alt || `图片 ${index + 1}`)}"><img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt || `图片 ${index + 1}`)}" /></button>`,
+    )
+    .join("");
+  return `<div class="owner-image-gallery" data-image-gallery>${mainHtml}<div class="owner-image-thumbs" data-image-thumbs>${thumbs}</div></div>`;
+};
+
 const getEntityImageAsset = (entity) => {
   const src = compact(entity?.avatarSrc || entity?.images?.[0]?.src);
   if (!src) {
@@ -3054,8 +3090,10 @@ const buildEntitySummaryHtml = (entity, options = {}) => {
           <h4>当前条目信息</h4>
           <div class="owner-entity-summary__layout ${imageAsset ? "has-image" : ""}">
             ${
-              imageAsset
-                ? `<div class="owner-entity-summary__media">
+              (entity.images || []).length > 1
+                ? `<div class="owner-entity-summary__media">${buildImageGalleryHtml(entity.images, entity.title)}</div>`
+                : imageAsset
+                  ? `<div class="owner-entity-summary__media">
                      <div class="owner-image-preview">
                        <img src="${escapeHtml(imageAsset.src)}" alt="${escapeHtml(imageAsset.alt)}" />
                      </div>
@@ -3814,7 +3852,7 @@ const dirRecordingDisplayTitle = (recording) => {
   const conductors = dirCreditNames(recording, ["conductor"]);
   const soloists = dirCreditNames(recording, ["soloist", "instrumentalist", "singer"]);
   const ensembles = dirCreditNames(recording, ["orchestra", "ensemble", "chorus"]);
-  const year = String(recording.performanceDateText || "").match(/\d{4}/)?.[0] || "";
+  const year = dirRecordingYearLabel(recording);
   const parts = [];
   if (year) {
     parts.push(year);
@@ -3822,11 +3860,21 @@ const dirRecordingDisplayTitle = (recording) => {
   if (conductors.length) {
     parts.push(conductors.join("、"));
   }
-  if (soloists.length) {
-    parts.push(soloists.join("、"));
-  }
-  if (ensembles.length) {
-    parts.push(ensembles.join("、"));
+  if (recording.workTypeHint === "opera_vocal") {
+    // 歌剧：年份 - 指挥 - 乐团/合唱 - 核心主演（最多 3 位）
+    if (ensembles.length) {
+      parts.push(ensembles.join("、"));
+    }
+    if (soloists.length) {
+      parts.push(soloists.slice(0, 3).join("、"));
+    }
+  } else {
+    if (soloists.length) {
+      parts.push(soloists.join("、"));
+    }
+    if (ensembles.length) {
+      parts.push(ensembles.join("、"));
+    }
   }
   return parts.join(" · ") || recording.title || recording.id;
 };
@@ -3908,6 +3956,27 @@ const dirInstrumentOf = (item) => {
 };
 
 
+const dirRecordingYearLabel = (recording) => {
+  const text = String(recording.performanceDateText || "").trim();
+  if (!text) {
+    return "";
+  }
+  if (/^\d{4}$/.test(text)) {
+    return text;
+  }
+  const years = [...new Set(text.match(/\d{4}/g) || [])];
+  if (!years.length) {
+    return "";
+  }
+  if (years.length === 1) {
+    return years[0];
+  }
+  if (/^\d{4}\s*[-–—~]\s*\d{2,4}$/.test(text)) {
+    return `${years[0]}-${years[years.length - 1]}`;
+  }
+  return years.join(" / ");
+};
+
 const dirWorkCatalogNumber = (work) => {
   const source = `${work.catalogue || ""} ${work.titleLatin || ""}`;
   const match = source.match(/(?:Op\.?|WAB|GMW|BWV|Hob\.|K\.|D\.?)\s*([0-9]+)/i);
@@ -3924,6 +3993,35 @@ const dirWorkCompare = (left, right) => {
     return diff;
   }
   return String(left.title || "").localeCompare(String(right.title || ""), "zh-Hans-CN");
+};
+
+const dirWorkGroupRank = (work) => {
+  const path = dirWorkGroupPath(work);
+  const first = path[0] || "";
+  if (/交响/.test(first)) {
+    return [0, 0];
+  }
+  if (/协奏/.test(first)) {
+    return [1, 0];
+  }
+  if (/奏鸣|独奏/.test(first)) {
+    const joined = path.join("");
+    const sub = /钢琴/.test(joined) ? 0 : /小提琴/.test(joined) ? 1 : 2;
+    return [2, sub];
+  }
+  return [3, 0];
+};
+
+const dirWorkGroupCompare = (left, right) => {
+  const [leftRank, leftSub] = dirWorkGroupRank(left);
+  const [rightRank, rightSub] = dirWorkGroupRank(right);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+  if (leftSub !== rightSub) {
+    return leftSub - rightSub;
+  }
+  return dirWorkCompare(left, right);
 };
 
 const dirRecordingSortValue = (recording) => {
@@ -4224,7 +4322,7 @@ const renderDirectory = () => {
       <div class="owner-dir-headline">
         <span>${escapeHtml([composer?.nameLatin, composer?.country].filter(Boolean).join(" / "))}</span>
         <button type="button" data-dir-entity="${escapeHtml(`composer:${top.id}`)}">进入条目</button>
-      </div>` + (works.length ? renderWorkTree(works.slice().sort(dirWorkCompare)) : '<p class="owner-empty">该作曲家下暂无作品。</p>');
+      </div>` + (works.length ? renderWorkTree(works.slice().sort(dirWorkGroupCompare)) : '<p class="owner-empty">该作曲家下暂无作品。</p>');
   } else if (top.kind === "work") {
     const work = dirFindEntity("work", top.id);
     const composer = (lib.composers || []).find((item) => item.id === work?.composerId);
@@ -7628,6 +7726,17 @@ const openExternalLink = (url) => {
 };
 
 document.addEventListener("click", (event) => {
+  const thumb = event.target instanceof Element ? event.target.closest("[data-image-thumb-src]") : null;
+  if (thumb) {
+    const gallery = thumb.closest("[data-image-gallery]");
+    const preview = gallery?.querySelector("[data-inline-entity-image-preview], [data-detail-image-preview]");
+    if (preview) {
+      const src = thumb.getAttribute("data-image-thumb-src") || "";
+      preview.innerHTML = `<img src="${src}" alt="" />`;
+      gallery.querySelectorAll("[data-image-thumb-src]").forEach((item) => item.classList.toggle("is-active", item === thumb));
+    }
+    return;
+  }
   const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
   if (!anchor) {
     return;
